@@ -109,6 +109,39 @@ button:hover {
     background: #3a3d46;
 }
 
+.look-select {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.look-options {
+    display: flex;
+    gap: 8px;
+}
+
+.look-options button {
+    flex: 1;
+    margin-top: 0;
+    text-align: center;
+}
+
+.look-options button.is-selected,
+.look-options button.is-selected:hover {
+    background: #4c5160;
+    border-color: #d7d8dc;
+}
+
+#cartoonControls {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+
+#cartoonControls[hidden] {
+    display: none;
+}
+
 .file-button input {
     display: none;
 }

@@ -13,12 +13,16 @@ uniform float uColorLevels;
 uniform float uEdgeThreshold;
 uniform float uOutlineThickness;
 
+//0 shows the untouched texture. 1 shows the Cartoon result.
+uniform float uCartoonEnabled;
+
 out vec4 fragColor; //shader output
 
 void main()
 {   
-    //read original pixel colour
-    vec3 color = texture(uTexture, vTexCoord).rgb;
+    //Keep the uploaded pixel before brightness, quantisation, or outlines change it.
+    vec3 originalColor = texture(uTexture, vTexCoord).rgb;
+    vec3 color = originalColor;
 
     //brightness changing
     //0 leaves the pic alone. Positive values push every channel toward white.
@@ -76,6 +80,9 @@ void main()
 
     //mix() returns color when the mask is 0, and outlineColor when the mask is 1.
     color = mix(color, outlineColor, edgeMask);
+
+    //0 keeps originalColor. 1 keeps the finished Cartoon colour above.
+    color = mix(originalColor, color, uCartoonEnabled);
 
     fragColor = vec4(color, 1.0);
 }

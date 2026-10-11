@@ -5,6 +5,7 @@ import {
     render,
     resetAdjustments,
     setBrightness,
+    setCartoonEnabled,
     setColorLevels,
     setContrast,
     setEdgeThreshold,
@@ -73,6 +74,12 @@ async function main()
         onOutlineThickness: (value) =>
         {
             setOutlineThickness(value);
+            render();
+        },
+
+        onCartoonEnabled: (value) =>
+        {
+            setCartoonEnabled(value);
             render();
         },
 

@@ -16,6 +16,9 @@ const saturationValue = document.getElementById("saturationValue");
 const colorLevelsValue = document.getElementById("colorLevelsValue");
 const edgeThresholdValue = document.getElementById("edgeThresholdValue");
 const outlineThicknessValue = document.getElementById("outlineThicknessValue");
+const cartoonControls = document.getElementById("cartoonControls");
+const lookOriginalButton = document.getElementById("lookOriginal");
+const lookCartoonButton = document.getElementById("lookCartoon");
 const resetButton = document.getElementById("reset");
 
 export function setStatus(message)
@@ -39,7 +42,17 @@ function updateSliderLabels()
 }
 
 // The callbacks are how UI events reach the rest of the app.
-export function initUI({ onImage, onBrightness, onContrast, onSaturation, onColorLevels, onEdgeThreshold, onOutlineThickness, onReset })
+function selectLook(cartoonEnabled, onCartoonEnabled)
+{
+    lookOriginalButton.classList.toggle("is-selected", !cartoonEnabled);
+    lookCartoonButton.classList.toggle("is-selected", cartoonEnabled);
+    lookOriginalButton.setAttribute("aria-pressed", String(!cartoonEnabled));
+    lookCartoonButton.setAttribute("aria-pressed", String(cartoonEnabled));
+    cartoonControls.hidden = !cartoonEnabled;
+    onCartoonEnabled(cartoonEnabled ? 1 : 0);
+}
+
+export function initUI({ onImage, onBrightness, onContrast, onSaturation, onColorLevels, onEdgeThreshold, onOutlineThickness, onCartoonEnabled, onReset })
 {
     imageInput.addEventListener("change", () =>
     {
@@ -89,6 +102,17 @@ export function initUI({ onImage, onBrightness, onContrast, onSaturation, onColo
         onOutlineThickness(Number(outlineThicknessInput.value));
     });
 
+    lookOriginalButton.addEventListener("click", () =>
+    {
+        selectLook(false, onCartoonEnabled);
+    });
+
+    lookCartoonButton.addEventListener("click", () =>
+    {
+        selectLook(true, onCartoonEnabled);
+    });
+
+    // Reset restores the slider numbers. The selected Look stays as it is.
     resetButton.addEventListener("click", () =>
     {
         brightnessInput.value = "0";

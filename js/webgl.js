@@ -14,6 +14,7 @@ let saturation = 1;
 let colorLevels = 32;
 let edgeThreshold = 0.15;
 let outlineThickness = 1;
+let cartoonEnabled = 1;
 
 let textureLocation = null;
 let brightnessLocation = null;
@@ -22,6 +23,7 @@ let saturationLocation = null;
 let colorLevelsLocation = null;
 let edgeThresholdLocation = null;
 let outlineThicknessLocation = null;
+let cartoonEnabledLocation = null;
 let fitScaleLocation = null;
 
 // Turns GLSL text into a shader object the program can link.
@@ -125,6 +127,7 @@ function setupRectangle()
     colorLevelsLocation = gl.getUniformLocation(program, "uColorLevels");
     edgeThresholdLocation = gl.getUniformLocation(program, "uEdgeThreshold");
     outlineThicknessLocation = gl.getUniformLocation(program, "uOutlineThickness");
+    cartoonEnabledLocation = gl.getUniformLocation(program, "uCartoonEnabled");
     fitScaleLocation = gl.getUniformLocation(program, "uFitScale");
 }
 
@@ -193,6 +196,11 @@ export function setOutlineThickness(value)
     outlineThickness = value;
 }
 
+export function setCartoonEnabled(value)
+{
+    cartoonEnabled = value;
+}
+
 export function resetAdjustments()
 {
     brightness = 0;
@@ -248,6 +256,7 @@ export function render()
     gl.uniform1f(colorLevelsLocation, colorLevels);
     gl.uniform1f(edgeThresholdLocation, edgeThreshold);
     gl.uniform1f(outlineThicknessLocation, outlineThickness);
+    gl.uniform1f(cartoonEnabledLocation, cartoonEnabled);
     gl.uniform2f(fitScaleLocation, scale[0], scale[1]);
 
     gl.drawArrays(gl.TRIANGLES, 0, 6);

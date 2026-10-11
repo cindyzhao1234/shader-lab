@@ -23,6 +23,14 @@
         </div>
 
         <div class="controls">
+            <div class="look-select">
+                <span class="control-heading">Look</span>
+                <div class="look-options">
+                    <button type="button" id="lookOriginal" class="look-button" aria-pressed="false">Original</button>
+                    <button type="button" id="lookCartoon" class="look-button is-selected" aria-pressed="true">Cartoon</button>
+                </div>
+            </div>
+
             <label>
                 <span class="control-heading">
                     <span>Brightness</span>
@@ -47,29 +55,31 @@
                 <input id="saturation" type="range" min="0" max="2" step="0.01" value="1">
             </label>
 
-            <label>
-                <span class="control-heading">
-                    <span>Colour Levels</span>
-                    <span id="colorLevelsValue">32</span>
-                </span>
-                <input id="colorLevels" type="range" min="2" max="32" step="1" value="32">
-            </label>
+            <div id="cartoonControls">
+                <label>
+                    <span class="control-heading">
+                        <span>Colour Levels</span>
+                        <span id="colorLevelsValue">32</span>
+                    </span>
+                    <input id="colorLevels" type="range" min="2" max="32" step="1" value="32">
+                </label>
 
-            <label>
-                <span class="control-heading">
-                    <span>Edge Threshold</span>
-                    <span id="edgeThresholdValue">0.15</span>
-                </span>
-                <input id="edgeThreshold" type="range" min="0.01" max="0.5" step="0.01" value="0.15">
-            </label>
+                <label>
+                    <span class="control-heading">
+                        <span>Edge Threshold</span>
+                        <span id="edgeThresholdValue">0.15</span>
+                    </span>
+                    <input id="edgeThreshold" type="range" min="0.01" max="0.5" step="0.01" value="0.15">
+                </label>
 
-            <label>
-                <span class="control-heading">
-                    <span>Outline Thickness</span>
-                    <span id="outlineThicknessValue">1</span>
-                </span>
-                <input id="outlineThickness" type="range" min="1" max="5" step="1" value="1">
-            </label>
+                <label>
+                    <span class="control-heading">
+                        <span>Outline Thickness</span>
+                        <span id="outlineThicknessValue">1</span>
+                    </span>
+                    <input id="outlineThickness" type="range" min="1" max="5" step="1" value="1">
+                </label>
+            </div>
 
             <button id="reset" type="button">Reset</button>
         </div>
