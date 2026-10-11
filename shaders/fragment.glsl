@@ -9,6 +9,8 @@ uniform sampler2D uTexture;
 uniform float uBrightness;
 uniform float uContrast;
 uniform float uSaturation;
+uniform float uColorLevels;
+uniform float uEdgeThreshold;
 
 out vec4 fragColor; //shader output
 
@@ -33,14 +35,11 @@ void main()
     //0 is fully gray, 1 is the original colour, above 1 pushes colour further.
     color = mix(vec3(grayscale), color, uSaturation);
 
-    //levels is how many steps each of red, green, and blue may use.
-    //4 means a channel can only land on a few bands instead of any shade.
-    //Lower levels make bigger jumps, so the picture looks more stylised.
-    //Higher levels keep more of the original colour.
-    float levels = 32.0;
-
-    //sort the color into levels
-    color = floor(color * levels) / levels;
+    //uColorLevels is how many steps each of red, green, and blue may use.
+    //It comes from the Colour Levels slider.
+    //Lower values make bigger jumps, so the picture looks more stylised.
+    //Higher values keep more of the original colour.
+    color = floor(color * uColorLevels) / uColorLevels;
 
     //get the texel
     vec2 texel = 1.0 / vec2(textureSize(uTexture, 0));
@@ -61,6 +60,16 @@ void main()
     //edgeStrength is the size of that jump. 0 is a flat area. Larger means a sharper edge.
     float edgeStrength = length(vec2(horizontal, vertical));
 
-    //Show the edge map instead of the quantised colour.
-    fragColor = vec4(vec3(edgeStrength), 1.0);
+    //uEdgeThreshold is the smallest jump that counts as an outline.
+    //It comes from the Edge Threshold slider. Raise it for fewer lines, lower it for more.
+    //step() returns 0 below the threshold and 1 at or above it.
+    //edgeMask is that yes/no choice: 0 means keep the colour, 1 means draw the line.
+    float edgeMask = step(uEdgeThreshold, edgeStrength);
+
+    vec3 outlineColor = vec3(0.0);
+
+    //mix() returns color when the mask is 0, and outlineColor when the mask is 1.
+    color = mix(color, outlineColor, edgeMask);
+
+    fragColor = vec4(color, 1.0);
 }

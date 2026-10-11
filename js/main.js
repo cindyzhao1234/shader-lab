@@ -5,7 +5,9 @@ import {
     render,
     resetAdjustments,
     setBrightness,
+    setColorLevels,
     setContrast,
+    setEdgeThreshold,
     setImage,
     setSaturation
 } from "./webgl.js";
@@ -52,6 +54,18 @@ async function main()
         onSaturation: (value) =>
         {
             setSaturation(value);
+            render();
+        },
+
+        onColorLevels: (value) =>
+        {
+            setColorLevels(value);
+            render();
+        },
+
+        onEdgeThreshold: (value) =>
+        {
+            setEdgeThreshold(value);
             render();
         },
 

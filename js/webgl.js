@@ -11,11 +11,15 @@ let sourceImage = null;
 let brightness = 0;
 let contrast = 1;
 let saturation = 1;
+let colorLevels = 32;
+let edgeThreshold = 0.15;
 
 let textureLocation = null;
 let brightnessLocation = null;
 let contrastLocation = null;
 let saturationLocation = null;
+let colorLevelsLocation = null;
+let edgeThresholdLocation = null;
 let fitScaleLocation = null;
 
 // Turns GLSL text into a shader object the program can link.
@@ -116,6 +120,8 @@ function setupRectangle()
     brightnessLocation = gl.getUniformLocation(program, "uBrightness");
     contrastLocation = gl.getUniformLocation(program, "uContrast");
     saturationLocation = gl.getUniformLocation(program, "uSaturation");
+    colorLevelsLocation = gl.getUniformLocation(program, "uColorLevels");
+    edgeThresholdLocation = gl.getUniformLocation(program, "uEdgeThreshold");
     fitScaleLocation = gl.getUniformLocation(program, "uFitScale");
 }
 
@@ -169,11 +175,23 @@ export function setSaturation(value)
     saturation = value;
 }
 
+export function setColorLevels(value)
+{
+    colorLevels = value;
+}
+
+export function setEdgeThreshold(value)
+{
+    edgeThreshold = value;
+}
+
 export function resetAdjustments()
 {
     brightness = 0;
     contrast = 1;
     saturation = 1;
+    colorLevels = 32;
+    edgeThreshold = 0.15;
 }
 
 // Keeps the image size for aspect-ratio fitting, and uploads a new GPU texture.
@@ -218,6 +236,8 @@ export function render()
     gl.uniform1f(brightnessLocation, brightness);
     gl.uniform1f(contrastLocation, contrast);
     gl.uniform1f(saturationLocation, saturation);
+    gl.uniform1f(colorLevelsLocation, colorLevels);
+    gl.uniform1f(edgeThresholdLocation, edgeThreshold);
     gl.uniform2f(fitScaleLocation, scale[0], scale[1]);
 
     gl.drawArrays(gl.TRIANGLES, 0, 6);
