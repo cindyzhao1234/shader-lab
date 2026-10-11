@@ -11,6 +11,7 @@ uniform float uContrast;
 uniform float uSaturation;
 uniform float uColorLevels;
 uniform float uEdgeThreshold;
+uniform float uOutlineThickness;
 
 out vec4 fragColor; //shader output
 
@@ -41,17 +42,22 @@ void main()
     //Higher values keep more of the original colour.
     color = floor(color * uColorLevels) / uColorLevels;
 
-    //get the texel
+    //One texel, in UV. UV runs from 0 to 1 across the whole image.
     vec2 texel = 1.0 / vec2(textureSize(uTexture, 0));
+
+    //uOutlineThickness is how many texels away the detector looks.
+    //It does not draw a stroke of that width. A larger value samples farther away,
+    //so more pixels near a contrast change count as an edge.
+    vec2 offset = texel * uOutlineThickness;
 
     //Read the original texture, not the graded colour above.
     //The neighbours show whether this spot is brighter or darker than the texels beside it.
     vec3 lumaWeights = vec3(0.2126, 0.7152, 0.0722);
 
-    float left = dot(texture(uTexture, vTexCoord + vec2(-texel.x, 0.0)).rgb, lumaWeights);
-    float right = dot(texture(uTexture, vTexCoord + vec2(texel.x, 0.0)).rgb, lumaWeights);
-    float up = dot(texture(uTexture, vTexCoord + vec2(0.0, texel.y)).rgb, lumaWeights);
-    float down = dot(texture(uTexture, vTexCoord + vec2(0.0, -texel.y)).rgb, lumaWeights);
+    float left = dot(texture(uTexture, vTexCoord + vec2(-offset.x, 0.0)).rgb, lumaWeights);
+    float right = dot(texture(uTexture, vTexCoord + vec2(offset.x, 0.0)).rgb, lumaWeights);
+    float up = dot(texture(uTexture, vTexCoord + vec2(0.0, offset.y)).rgb, lumaWeights);
+    float down = dot(texture(uTexture, vTexCoord + vec2(0.0, -offset.y)).rgb, lumaWeights);
 
     //How much the brightness changes across the texel, and up and down it.
     float horizontal = abs(left - right);

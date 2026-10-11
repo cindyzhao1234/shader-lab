@@ -9,6 +9,7 @@ import {
     setContrast,
     setEdgeThreshold,
     setImage,
+    setOutlineThickness,
     setSaturation
 } from "./webgl.js";
 
@@ -66,6 +67,12 @@ async function main()
         onEdgeThreshold: (value) =>
         {
             setEdgeThreshold(value);
+            render();
+        },
+
+        onOutlineThickness: (value) =>
+        {
+            setOutlineThickness(value);
             render();
         },
 

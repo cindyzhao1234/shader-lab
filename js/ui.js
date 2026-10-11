@@ -9,11 +9,13 @@ const contrastInput = document.getElementById("contrast");
 const saturationInput = document.getElementById("saturation");
 const colorLevelsInput = document.getElementById("colorLevels");
 const edgeThresholdInput = document.getElementById("edgeThreshold");
+const outlineThicknessInput = document.getElementById("outlineThickness");
 const brightnessValue = document.getElementById("brightnessValue");
 const contrastValue = document.getElementById("contrastValue");
 const saturationValue = document.getElementById("saturationValue");
 const colorLevelsValue = document.getElementById("colorLevelsValue");
 const edgeThresholdValue = document.getElementById("edgeThresholdValue");
+const outlineThicknessValue = document.getElementById("outlineThicknessValue");
 const resetButton = document.getElementById("reset");
 
 export function setStatus(message)
@@ -33,10 +35,11 @@ function updateSliderLabels()
     saturationValue.textContent = Number(saturationInput.value).toFixed(2);
     colorLevelsValue.textContent = String(Number(colorLevelsInput.value));
     edgeThresholdValue.textContent = Number(edgeThresholdInput.value).toFixed(2);
+    outlineThicknessValue.textContent = String(Number(outlineThicknessInput.value));
 }
 
 // The callbacks are how UI events reach the rest of the app.
-export function initUI({ onImage, onBrightness, onContrast, onSaturation, onColorLevels, onEdgeThreshold, onReset })
+export function initUI({ onImage, onBrightness, onContrast, onSaturation, onColorLevels, onEdgeThreshold, onOutlineThickness, onReset })
 {
     imageInput.addEventListener("change", () =>
     {
@@ -80,6 +83,12 @@ export function initUI({ onImage, onBrightness, onContrast, onSaturation, onColo
         onEdgeThreshold(Number(edgeThresholdInput.value));
     });
 
+    outlineThicknessInput.addEventListener("input", () =>
+    {
+        updateSliderLabels();
+        onOutlineThickness(Number(outlineThicknessInput.value));
+    });
+
     resetButton.addEventListener("click", () =>
     {
         brightnessInput.value = "0";
@@ -87,6 +96,7 @@ export function initUI({ onImage, onBrightness, onContrast, onSaturation, onColo
         saturationInput.value = "1";
         colorLevelsInput.value = "32";
         edgeThresholdInput.value = "0.15";
+        outlineThicknessInput.value = "1";
         updateSliderLabels();
         onReset();
     });
