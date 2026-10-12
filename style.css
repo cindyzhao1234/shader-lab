@@ -17,6 +17,22 @@ h1 {
     font-weight: 600;
 }
 
+a {
+    color: #d7d8dc;
+}
+
+.lesson-link {
+    margin: -8px 0 16px;
+}
+
+.triangle-canvas {
+    width: 480px;
+    height: 480px;
+    max-width: 100%;
+    background: #111216;
+    border: 1px solid #34363c;
+}
+
 .layout {
     display: flex;
     gap: 20px;
