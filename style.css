@@ -25,7 +25,8 @@ a {
     margin: -8px 0 16px;
 }
 
-.triangle-canvas {
+.triangle-canvas,
+.cube-canvas {
     width: 480px;
     height: 480px;
     max-width: 100%;
