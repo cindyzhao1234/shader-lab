@@ -9,9 +9,37 @@
 <body>
     <h1>Cube</h1>
     <p class="lesson-link"><a href="triangle.html">Triangle lesson</a> · <a href="index.html">Game Look Lab</a></p>
-    <p>Twelve triangles make one cube. Each face has its own colour. The tilt is temporary.</p>
+    <p>Twelve triangles make one cube. The sliders scale it, turn it, then move it.</p>
 
-    <canvas id="glCanvas" class="cube-canvas" width="480" height="480"></canvas>
+    <div class="layout">
+        <canvas id="glCanvas" class="cube-canvas" width="480" height="480"></canvas>
+
+        <div class="controls">
+            <label>
+                <span class="control-heading">
+                    <span>Position X</span>
+                    <span id="positionXValue">0.00</span>
+                </span>
+                <input id="positionX" type="range" min="-0.6" max="0.6" step="0.01" value="0">
+            </label>
+
+            <label>
+                <span class="control-heading">
+                    <span>Rotation Y</span>
+                    <span id="rotationYValue">35°</span>
+                </span>
+                <input id="rotationY" type="range" min="-180" max="180" step="1" value="35">
+            </label>
+
+            <label>
+                <span class="control-heading">
+                    <span>Scale</span>
+                    <span id="scaleValue">1.00</span>
+                </span>
+                <input id="scale" type="range" min="0.5" max="1.5" step="0.01" value="1">
+            </label>
+        </div>
+    </div>
     <p id="status" role="status"></p>
 
     <script type="module" src="js/cube.js"></script>

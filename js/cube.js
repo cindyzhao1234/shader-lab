@@ -1,3 +1,4 @@
+import { multiplyMatrices, rotationYMatrix, scaleMatrix, translationMatrix } from "./mat4.js";
 import { createProgram } from "./webgl.js";
 
 const canvas = document.getElementById("glCanvas");
@@ -12,8 +13,8 @@ if (!gl)
     throw new Error("WebGL2 is not supported");
 }
 
-// Each corner now has x, y, and z.
-// On this page, a smaller z is nearer. Phase 4.3 will replace that with a camera.
+// Each corner is model space: the cube's own x, y, and z, before the sliders move it.
+// The red face is z = -0.5. A modest Y rotation keeps that face toward the viewer.
 // A face has its own four corners so that face can be one solid colour.
 // A single stored vertex can only carry one colour, and each cube corner belongs to three faces.
 // x, y, z, r, g, b
@@ -82,11 +83,54 @@ async function loadShaderSource(url)
     return response.text();
 }
 
+const positionXInput = document.getElementById("positionX");
+const rotationYInput = document.getElementById("rotationY");
+const scaleInput = document.getElementById("scale");
+const positionXValue = document.getElementById("positionXValue");
+const rotationYValue = document.getElementById("rotationYValue");
+const scaleValue = document.getElementById("scaleValue");
+
+let positionX = 0;
+let rotationYDegrees = 35;
+let uniformScale = 1;
+let program = null;
+let uModelLocation = null;
+
+function updateSliderLabels()
+{
+    positionXValue.textContent = positionX.toFixed(2);
+    rotationYValue.textContent = rotationYDegrees.toFixed(0) + "°";
+    scaleValue.textContent = uniformScale.toFixed(2);
+}
+
+// Scale, then rotate, then translate. Matrix multiplication applies from the right.
+function modelMatrix()
+{
+    const scale = scaleMatrix(uniformScale);
+    const rotation = rotationYMatrix(rotationYDegrees * Math.PI / 180);
+    const translation = translationMatrix(positionX, 0, 0);
+
+    return multiplyMatrices(translation, multiplyMatrices(rotation, scale));
+}
+
+function render()
+{
+    gl.useProgram(program);
+
+    // false tells WebGL the array is already column-major, so it must not be transposed.
+    gl.uniformMatrix4fv(uModelLocation, false, modelMatrix());
+
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+    // drawElements walks the index list and reuses corners instead of copying them.
+    gl.drawElements(gl.TRIANGLES, indices.length, gl.UNSIGNED_SHORT, 0);
+}
+
 async function main()
 {
     const vertexSource = await loadShaderSource("shaders/cube-vertex.glsl");
     const fragmentSource = await loadShaderSource("shaders/cube-fragment.glsl");
-    const program = createProgram(gl, vertexSource, fragmentSource);
+    program = createProgram(gl, vertexSource, fragmentSource);
 
     const positionBuffer = gl.createBuffer();
 
@@ -115,12 +159,33 @@ async function main()
     gl.enable(gl.DEPTH_TEST);
 
     gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
-    gl.useProgram(program);
     gl.clearColor(0.07, 0.07, 0.08, 1);
-    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-    // drawElements walks the index list and reuses corners instead of copying them.
-    gl.drawElements(gl.TRIANGLES, indices.length, gl.UNSIGNED_SHORT, 0);
+    // The uniform location is how JavaScript finds uModel inside the linked program.
+    uModelLocation = gl.getUniformLocation(program, "uModel");
+
+    positionXInput.addEventListener("input", () =>
+    {
+        positionX = Number(positionXInput.value);
+        updateSliderLabels();
+        render();
+    });
+
+    rotationYInput.addEventListener("input", () =>
+    {
+        rotationYDegrees = Number(rotationYInput.value);
+        updateSliderLabels();
+        render();
+    });
+
+    scaleInput.addEventListener("input", () =>
+    {
+        uniformScale = Number(scaleInput.value);
+        updateSliderLabels();
+        render();
+    });
+
+    render();
 }
 
 main().catch((error) =>
