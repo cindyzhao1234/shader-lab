@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Scene — Game Look Lab</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <h1>Scene</h1>
+    <p class="lesson-link"><a href="triangle.html">Triangle lesson</a> · <a href="index.html">Game Look Lab</a></p>
+    <p>Several objects share one camera and one light. Each object has its own shape, place, and material.</p>
+    <p id="status" role="status"></p>
+
+    <div class="scene-layout">
+        <aside class="controls scene-panel">
+            <span class="control-heading">Scene Objects</span>
+            <p class="scene-note">A shape can be shared. Each row has its own place and material.</p>
+            <div id="sceneList" class="scene-list"></div>
+            <div class="scene-actions">
+                <button type="button" id="addCube">Add Cube</button>
+                <button type="button" id="addSphere">Add Sphere</button>
+                <label class="file-button">
+                    Import Model
+                    <input id="importObj" type="file" accept=".obj,text/plain">
+                </label>
+            </div>
+        </aside>
+
+        <div class="scene-viewport">
+            <canvas id="glCanvas" class="scene-canvas" width="640" height="640"></canvas>
+        </div>
+
+        <aside class="controls scene-panel">
+            <p id="noSelection" hidden>Select an object.</p>
+
+            <div id="objectProperties">
+                <label>
+                    <span class="control-heading"><span>Name</span></span>
+                    <input id="objectName" type="text" value="Cube">
+                </label>
+                <button type="button" id="deleteObject">Delete Object</button>
+
+                <label>
+                    <span class="control-heading">
+                        <span>Position X</span>
+                        <span id="positionXValue">0.00</span>
+                    </span>
+                    <input id="positionX" type="range" min="-3" max="3" step="0.01" value="0">
+                </label>
+                <label>
+                    <span class="control-heading">
+                        <span>Position Y</span>
+                        <span id="positionYValue">0.00</span>
+                    </span>
+                    <input id="positionY" type="range" min="-3" max="3" step="0.01" value="0">
+                </label>
+                <label>
+                    <span class="control-heading">
+                        <span>Position Z</span>
+                        <span id="positionZValue">0.00</span>
+                    </span>
+                    <input id="positionZ" type="range" min="-3" max="3" step="0.01" value="0">
+                </label>
+                <label>
+                    <span class="control-heading">
+                        <span>Rotation X</span>
+                        <span id="rotationXValue">0°</span>
+                    </span>
+                    <input id="rotationX" type="range" min="-180" max="180" step="1" value="0">
+                </label>
+                <label>
+                    <span class="control-heading">
+                        <span>Rotation Y</span>
+                        <span id="rotationYValue">0°</span>
+                    </span>
+                    <input id="rotationY" type="range" min="-180" max="180" step="1" value="0">
+                </label>
+                <label>
+                    <span class="control-heading">
+                        <span>Rotation Z</span>
+                        <span id="rotationZValue">0°</span>
+                    </span>
+                    <input id="rotationZ" type="range" min="-180" max="180" step="1" value="0">
+                </label>
+                <label>
+                    <span class="control-heading">
+                        <span>Scale</span>
+                        <span id="scaleValue">1.00</span>
+                    </span>
+                    <input id="scale" type="range" min="0.1" max="3" step="0.01" value="1">
+                </label>
+
+                <div id="materialControls">
+                    <div class="look-select">
+                        <span class="control-heading">
+                            <span>Material</span>
+                            <span id="materialState">Custom</span>
+                        </span>
+                        <div class="look-options">
+                            <button type="button" id="materialMatte" class="look-button">Matte</button>
+                            <button type="button" id="materialPlastic" class="look-button">Plastic</button>
+                            <button type="button" id="materialGlossy" class="look-button">Glossy</button>
+                            <button type="button" id="materialCeramic" class="look-button">Ceramic</button>
+                        </div>
+                    </div>
+                    <label>
+                        <span class="control-heading">
+                            <span>Base Colour</span>
+                            <span id="baseColorValue">#000000</span>
+                        </span>
+                        <input id="baseColor" type="color" value="#000000">
+                    </label>
+                    <label>
+                        <span class="control-heading">
+                            <span>Shininess</span>
+                            <span id="shininessValue">32</span>
+                        </span>
+                        <input id="shininess" type="range" min="1" max="128" step="1" value="32">
+                    </label>
+                    <label>
+                        <span class="control-heading">
+                            <span>Specular Strength</span>
+                            <span id="specularStrengthValue">0.60</span>
+                        </span>
+                        <input id="specularStrength" type="range" min="0" max="1" step="0.01" value="0.6">
+                    </label>
+                </div>
+            </div>
+
+            <div class="look-select">
+                <span class="control-heading">Display</span>
+                <div class="look-options">
+                    <button type="button" id="showFaces" class="look-button">Face Colours</button>
+                    <button type="button" id="showNormals" class="look-button">Normals</button>
+                    <button type="button" id="showDiffuse" class="look-button">Diffuse Lighting</button>
+                    <button type="button" id="showSpecular" class="look-button is-selected" aria-pressed="true">Diffuse + Specular</button>
+                </div>
+            </div>
+
+            <div id="lightControls">
+                <label>
+                    <span class="control-heading">
+                        <span>Light Direction X</span>
+                        <span id="lightXValue">0.40</span>
+                    </span>
+                    <input id="lightX" type="range" min="-1" max="1" step="0.01" value="0.4">
+                </label>
+                <label>
+                    <span class="control-heading">
+                        <span>Light Direction Y</span>
+                        <span id="lightYValue">1.00</span>
+                    </span>
+                    <input id="lightY" type="range" min="-1" max="1" step="0.01" value="1">
+                </label>
+                <label>
+                    <span class="control-heading">
+                        <span>Light Direction Z</span>
+                        <span id="lightZValue">0.25</span>
+                    </span>
+                    <input id="lightZ" type="range" min="-1" max="1" step="0.01" value="0.25">
+                </label>
+                <label>
+                    <span class="control-heading">
+                        <span>Ambient</span>
+                        <span id="ambientValue">0.22</span>
+                    </span>
+                    <input id="ambient" type="range" min="0" max="1" step="0.01" value="0.22">
+                </label>
+                <label>
+                    <span class="control-heading">
+                        <span>Diffuse Intensity</span>
+                        <span id="diffuseValue">0.80</span>
+                    </span>
+                    <input id="diffuseIntensity" type="range" min="0" max="1" step="0.01" value="0.8">
+                </label>
+                <label>
+                    <span class="control-heading">
+                        <span>Specular Intensity</span>
+                        <span id="specularIntensityValue">1.00</span>
+                    </span>
+                    <input id="specularIntensity" type="range" min="0" max="2" step="0.01" value="1">
+                </label>
+            </div>
+
+            <label>
+                <span class="control-heading">
+                    <span>Camera X</span>
+                    <span id="cameraXValue">4.20</span>
+                </span>
+                <input id="cameraX" type="range" min="-12" max="12" step="0.01" value="4.2">
+            </label>
+            <label>
+                <span class="control-heading">
+                    <span>Camera Y</span>
+                    <span id="cameraYValue">2.60</span>
+                </span>
+                <input id="cameraY" type="range" min="-12" max="12" step="0.01" value="2.6">
+            </label>
+            <label>
+                <span class="control-heading">
+                    <span>Camera Z</span>
+                    <span id="cameraZValue">5.20</span>
+                </span>
+                <input id="cameraZ" type="range" min="-12" max="12" step="0.01" value="5.2">
+            </label>
+            <label>
+                <span class="control-heading">
+                    <span>Field of View</span>
+                    <span id="fovValue">50°</span>
+                </span>
+                <input id="fov" type="range" min="20" max="120" step="1" value="50">
+            </label>
+            <button type="button" id="resetCamera">Reset Camera</button>
+        </aside>
+    </div>
+
+    <script type="module" src="js/cube.js"></script>
+</body>
+</html>
