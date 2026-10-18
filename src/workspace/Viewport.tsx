@@ -1,0 +1,129 @@
+import { useState, type RefObject } from "react";
+import type { StageStats } from "../render/stage";
+import { FOV_RANGE } from "../render/stage";
+import { findLook } from "../looks/catalogue";
+import { IconButton } from "../ui/Button";
+import { Icon } from "../ui/Icon";
+import { Popover } from "../ui/Popover";
+import { Slider } from "../ui/Slider";
+import { IS_MAC, useWorkspace, useWorkspaceStore } from "./context";
+import { shortcutKeys } from "./shortcuts";
+
+/**
+ * The 3D view and the few controls that float over it.
+ *
+ * Overlays are siblings of the canvas, not children, and OrbitControls only
+ * listens on the canvas — so clicking a toolbar button can never start an
+ * orbit, and orbiting can never press a button.
+ */
+
+interface ViewportProps {
+  canvasRef: RefObject<HTMLCanvasElement | null>;
+  stats: StageStats | null;
+  loading: boolean;
+  showStats: boolean;
+  onToggleStats: () => void;
+}
+
+const DEFAULT_FOV = 50;
+
+export function Viewport({ canvasRef, stats, loading, showStats, onToggleStats }: ViewportProps) {
+  const store = useWorkspaceStore();
+  const { fov, activeLookId } = useWorkspace();
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const [interacted, setInteracted] = useState(false);
+  const look = findLook(activeLookId);
+
+  return (
+    <div className="viewport">
+      <canvas
+        ref={canvasRef}
+        className="viewport__canvas"
+        aria-label="3D view of your scene. Drag to orbit, scroll to zoom, right-drag to pan."
+        onPointerDown={() => setInteracted(true)}
+        onWheel={() => setInteracted(true)}
+      />
+
+      <div className="viewport__toolbar" role="toolbar" aria-label="View">
+        <IconButton
+          icon="focus"
+          label="Focus selection"
+          shortcut={shortcutKeys("focus", IS_MAC)}
+          tone="onDark"
+          onClick={() => store.focus()}
+        />
+        <IconButton
+          icon="reset"
+          label="Return to starting view"
+          shortcut={shortcutKeys("resetView", IS_MAC)}
+          tone="onDark"
+          onClick={() => store.resetView()}
+        />
+        <span className="viewport__toolbar-divider" aria-hidden="true" />
+        <Popover
+          open={cameraOpen}
+          onOpenChange={setCameraOpen}
+          label="Camera"
+          tone="onDark"
+          trigger={(props) => (
+            <IconButton icon="camera" label="Camera" tone="onDark" pressed={cameraOpen} {...props} />
+          )}
+        >
+          <Slider
+            tone="onDark"
+            label="Field of view"
+            value={Math.round(fov)}
+            min={FOV_RANGE.min}
+            max={FOV_RANGE.max}
+            step={1}
+            unit="°"
+            defaultValue={DEFAULT_FOV}
+            hint="Wide angles exaggerate depth. Narrow ones flatten it, like a long lens."
+            onChange={(value) => store.setFov(value)}
+            onCommit={() => store.endGesture()}
+          />
+        </Popover>
+        <IconButton
+          icon="gauge"
+          label={showStats ? "Hide performance" : "Show performance"}
+          tone="onDark"
+          pressed={showStats}
+          onClick={onToggleStats}
+        />
+      </div>
+
+      {look && (
+        <div className="viewport__look" aria-live="polite">
+          <Icon name="sparkles" size={14} />
+          <span className="viewport__look-label">Look</span>
+          <span className="viewport__look-name">{look.name}</span>
+        </div>
+      )}
+
+      <p className={interacted ? "viewport__hint is-hidden" : "viewport__hint"} aria-hidden="true">
+        <Icon name="orbit" size={14} />
+        <span className="viewport__hint-mouse">Drag to orbit · Scroll to zoom · Right-drag to pan</span>
+        <span className="viewport__hint-touch">Drag to orbit · Pinch to zoom · Two-finger drag to pan</span>
+      </p>
+
+      {showStats && stats && (
+        <div className="viewport__stats" aria-label="Performance">
+          <span>
+            <strong>{Number.isFinite(stats.frameMs) ? stats.frameMs.toFixed(1) : "–"}</strong> ms
+          </span>
+          <span>
+            <strong>{stats.triangles.toLocaleString()}</strong> triangles
+          </span>
+          <span>
+            <strong>{stats.drawCalls}</strong> draws
+          </span>
+        </div>
+      )}
+
+      <div className={loading ? "viewport__loading" : "viewport__loading is-done"} aria-hidden={!loading}>
+        <span className="viewport__loading-dot" />
+        Preparing your studio…
+      </div>
+    </div>
+  );
+}

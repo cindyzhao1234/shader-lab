@@ -55,12 +55,21 @@ export interface DemoScene {
   lights: THREE.Light[];
 }
 
-export function createDemoScene(): DemoScene {
+export interface DemoTextures {
+  checker: THREE.Texture;
+  rippleNormal: THREE.Texture;
+}
+
+/**
+ * The procedural textures are drawn on a canvas. Tests running without a DOM
+ * pass stand-ins instead.
+ */
+export function createDemoScene(textures?: DemoTextures): DemoScene {
   const root = new THREE.Group();
   root.name = "Demo Scene";
 
-  const checker = createCheckerTexture(6);
-  const rippleNormal = createRippleNormalTexture();
+  const checker = textures?.checker ?? createCheckerTexture(6);
+  const rippleNormal = textures?.rippleNormal ?? createRippleNormalTexture();
 
   const platform = new THREE.Mesh(
     new THREE.BoxGeometry(3.6, 0.16, 3.6),

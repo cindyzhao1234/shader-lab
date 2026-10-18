@@ -18,6 +18,32 @@ import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 /** Frames excluded from the timing average while shaders compile. */
 const WARMUP_FRAMES = 3;
 
+/** Consecutive still frames before the camera counts as settled. */
+const SETTLE_FRAMES = 8;
+
+const FOCUS_DURATION_MS = 520;
+
+/** The three-quarter view the demo scene was composed for. */
+const DEFAULT_VIEW_DIRECTION = new THREE.Vector3(4.2, 2.6, 5.2).normalize();
+
+export const FOV_RANGE = { min: 20, max: 80 } as const;
+
+interface CameraTween {
+  fromPosition: THREE.Vector3;
+  toPosition: THREE.Vector3;
+  fromTarget: THREE.Vector3;
+  toTarget: THREE.Vector3;
+  startedAt: number;
+  duration: number;
+}
+
+export interface FrameOptions {
+  padding?: number;
+  animate?: boolean;
+  /** View direction from the target towards the camera. Defaults to the current one. */
+  direction?: THREE.Vector3;
+}
+
 export interface StageCapabilities {
   /** False when the GPU cannot render to a half-float target. */
   highPrecision: boolean;
@@ -32,6 +58,9 @@ export interface StageStats {
    * because rendering is on demand: a static scene renders a few times a
    * second, and an fps counter would read as terrible performance when
    * nothing is actually wrong.
+   *
+   * NaN until enough frames have rendered to give an honest figure; the
+   * first few are dominated by shader compilation.
    */
   frameMs: number;
   triangles: number;
@@ -66,6 +95,11 @@ export class RenderStage {
   private disposed = false;
   private smoothedFrameMs = 0;
   private framesRendered = 0;
+  private readonly settledListeners = new Set<() => void>();
+  private readonly firstFrameListeners = new Set<() => void>();
+  private cameraMoving = false;
+  private quietFrames = 0;
+  private tween: CameraTween | undefined;
 
   constructor(options: StageOptions) {
     const { canvas } = options;
@@ -150,36 +184,153 @@ export class RenderStage {
     };
   }
 
+  /**
+   * Called once each time the camera comes to rest after moving, whether from
+   * the user orbiting or from an animated focus. Expensive work that depends
+   * on the view, such as preview thumbnails, waits for this.
+   */
+  onCameraSettled(listener: () => void): () => void {
+    this.settledListeners.add(listener);
+    return () => {
+      this.settledListeners.delete(listener);
+    };
+  }
+
+  /** Called once, after the first frame reaches the screen. */
+  onFirstFrame(listener: () => void): () => void {
+    if (this.framesRendered > 0) {
+      queueMicrotask(listener);
+      return () => {};
+    }
+
+    this.firstFrameListeners.add(listener);
+    return () => {
+      this.firstFrameListeners.delete(listener);
+    };
+  }
+
+  get fov(): number {
+    return this.camera.fov;
+  }
+
+  setFov(degrees: number): void {
+    this.camera.fov = THREE.MathUtils.clamp(degrees, FOV_RANGE.min, FOV_RANGE.max);
+    this.camera.updateProjectionMatrix();
+    this.requestRender();
+    this.emitSettled();
+  }
+
   /** Moves the camera so the given object, or the whole scene, fills the view. */
   frameAll(target: THREE.Object3D = this.scene, padding = 1.3): void {
+    this.frame(target, { padding });
+  }
+
+  /** Returns to the default three-quarter view of the given content. */
+  resetView(target: THREE.Object3D = this.scene): void {
+    this.frame(target, { animate: true, direction: DEFAULT_VIEW_DIRECTION });
+  }
+
+  frame(target: THREE.Object3D, options: FrameOptions = {}): void {
     const box = new THREE.Box3().setFromObject(target);
 
     if (box.isEmpty()) {
       return;
     }
 
+    const padding = options.padding ?? 1.3;
     const size = box.getSize(new THREE.Vector3());
     const centre = box.getCenter(new THREE.Vector3());
-    const radius = Math.max(size.length() * 0.5, 0.0001);
+    const radius = Math.max(size.length() * 0.5, 0.05);
     const fov = THREE.MathUtils.degToRad(this.camera.fov);
-    const distance = (radius / Math.sin(fov * 0.5)) * padding;
+    const distance = THREE.MathUtils.clamp(
+      (radius / Math.sin(fov * 0.5)) * padding,
+      this.controls.minDistance,
+      this.controls.maxDistance,
+    );
 
-    const direction = this.camera.position
-      .clone()
-      .sub(this.controls.target)
+    const direction = (options.direction?.clone() ?? this.camera.position.clone().sub(this.controls.target))
       .normalize();
 
     if (direction.lengthSq() < 1e-6) {
-      direction.set(0.6, 0.42, 0.68).normalize();
+      direction.copy(DEFAULT_VIEW_DIRECTION);
     }
 
-    this.controls.target.copy(centre);
-    this.camera.position.copy(centre).addScaledVector(direction, distance);
-    this.camera.near = Math.max(distance / 1000, 0.01);
-    this.camera.far = distance * 10;
+    const toPosition = centre.clone().addScaledVector(direction, distance);
+
+    // Near and far follow the content being framed. They are never tightened
+    // below the whole scene's needs, so focusing a pebble does not clip the
+    // platform behind it.
+    const sceneRadius = new THREE.Box3().setFromObject(this.scene).getSize(new THREE.Vector3()).length();
+    this.camera.near = Math.max(Math.min(distance / 1000, 0.05), 0.005);
+    this.camera.far = Math.max(distance * 10, sceneRadius * 4, 50);
     this.camera.updateProjectionMatrix();
-    this.controls.update();
+
+    if (!options.animate) {
+      this.tween = undefined;
+      this.controls.enabled = true;
+      this.controls.target.copy(centre);
+      this.camera.position.copy(toPosition);
+      this.controls.update();
+      this.requestRender();
+      return;
+    }
+
+    this.stopControlMomentum();
+    this.controls.enabled = false;
+    this.tween = {
+      fromPosition: this.camera.position.clone(),
+      toPosition,
+      fromTarget: this.controls.target.clone(),
+      toTarget: centre,
+      startedAt: performance.now(),
+      duration: FOCUS_DURATION_MS,
+    };
     this.requestRender();
+  }
+
+  /**
+   * Renders a fresh frame and copies the centre of it into a small image.
+   * The copy must happen in the same task as the render: the canvas does not
+   * preserve its drawing buffer, so by the next task the pixels may be gone.
+   */
+  captureFrame(width: number, aspect = 16 / 10): string {
+    this.composer.render();
+
+    const source = this.renderer.domElement;
+    const sourceAspect = source.width / source.height;
+    let cropWidth = source.width;
+    let cropHeight = source.height;
+
+    if (sourceAspect > aspect) {
+      cropWidth = Math.round(source.height * aspect);
+    } else {
+      cropHeight = Math.round(source.width / aspect);
+    }
+
+    const output = document.createElement("canvas");
+    output.width = Math.round(width);
+    output.height = Math.round(width / aspect);
+
+    const context = output.getContext("2d");
+
+    if (!context) {
+      return "";
+    }
+
+    context.imageSmoothingQuality = "high";
+    context.drawImage(
+      source,
+      (source.width - cropWidth) / 2,
+      (source.height - cropHeight) / 2,
+      cropWidth,
+      cropHeight,
+      0,
+      0,
+      output.width,
+      output.height,
+    );
+
+    return output.toDataURL("image/webp", 0.86);
   }
 
   dispose(): void {
@@ -188,6 +339,8 @@ export class RenderStage {
     }
 
     this.disposed = true;
+    this.settledListeners.clear();
+    this.firstFrameListeners.clear();
     cancelAnimationFrame(this.frameHandle);
     this.resizeObserver.disconnect();
     this.controls.dispose();
@@ -228,10 +381,23 @@ export class RenderStage {
 
       this.frameHandle = requestAnimationFrame(tick);
 
+      const tweening = this.stepTween(performance.now());
+
       // Damping mutates the camera, so it must run every frame and report
       // whether anything actually moved.
-      if (this.controls.update()) {
+      const moved = this.controls.update() || tweening;
+
+      if (moved) {
         this.needsRender = true;
+        this.cameraMoving = true;
+        this.quietFrames = 0;
+      } else if (this.cameraMoving) {
+        this.quietFrames += 1;
+
+        if (this.quietFrames >= SETTLE_FRAMES) {
+          this.cameraMoving = false;
+          this.emitSettled();
+        }
       }
 
       if (!this.needsRender) {
@@ -249,8 +415,55 @@ export class RenderStage {
     this.frameHandle = requestAnimationFrame(tick);
   }
 
+  /** Advances an animated focus. Returns true while the camera is still travelling. */
+  private stepTween(now: number): boolean {
+    const tween = this.tween;
+
+    if (!tween) {
+      return false;
+    }
+
+    const linear = Math.min((now - tween.startedAt) / tween.duration, 1);
+    const eased = 1 - Math.pow(1 - linear, 3);
+
+    this.camera.position.lerpVectors(tween.fromPosition, tween.toPosition, eased);
+    this.controls.target.lerpVectors(tween.fromTarget, tween.toTarget, eased);
+
+    if (linear >= 1) {
+      this.tween = undefined;
+      this.controls.enabled = true;
+    }
+
+    return true;
+  }
+
+  /**
+   * Damped controls keep drifting after the pointer is released. Applying the
+   * remaining motion with damping off flushes it, so an animated focus is not
+   * fighting leftover momentum.
+   */
+  private stopControlMomentum(): void {
+    this.controls.enableDamping = false;
+    this.controls.update();
+    this.controls.enableDamping = true;
+  }
+
+  private emitSettled(): void {
+    for (const listener of this.settledListeners) {
+      listener();
+    }
+  }
+
   private reportStats(frameMs: number): void {
     this.framesRendered += 1;
+
+    if (this.framesRendered === 1) {
+      for (const listener of this.firstFrameListeners) {
+        listener();
+      }
+
+      this.firstFrameListeners.clear();
+    }
 
     if (!this.statsListener) {
       return;
@@ -258,17 +471,15 @@ export class RenderStage {
 
     // The first frames compile shaders and warm the pipeline. Averaging them
     // in makes a healthy scene look slow for a long time afterwards.
-    if (this.framesRendered <= WARMUP_FRAMES) {
-      return;
+    if (this.framesRendered > WARMUP_FRAMES) {
+      this.smoothedFrameMs =
+        this.smoothedFrameMs === 0 ? frameMs : this.smoothedFrameMs * 0.85 + frameMs * 0.15;
     }
-
-    this.smoothedFrameMs =
-      this.smoothedFrameMs === 0 ? frameMs : this.smoothedFrameMs * 0.85 + frameMs * 0.15;
 
     const info = this.renderer.info;
 
     this.statsListener({
-      frameMs: this.smoothedFrameMs,
+      frameMs: this.smoothedFrameMs === 0 ? Number.NaN : this.smoothedFrameMs,
       triangles: info.render.triangles,
       drawCalls: info.render.calls,
       programs: info.programs?.length ?? 0,
