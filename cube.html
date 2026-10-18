@@ -9,7 +9,7 @@
 <body>
     <h1>Scene</h1>
     <p class="lesson-link"><a href="triangle.html">Triangle lesson</a> · <a href="index.html">Game Look Lab</a></p>
-    <p>Several objects share one camera and one light. Each object has its own shape, place, and material.</p>
+    <p>Several objects share one camera and a small set of lights. Each object has its own shape, place, and material.</p>
     <p id="status" role="status"></p>
 
     <div class="scene-layout">
@@ -24,6 +24,7 @@
                     Import Model
                     <input id="importObj" type="file" accept=".obj,text/plain">
                 </label>
+                <button type="button" id="resetDemo">Reset Phase 5 Demo</button>
             </div>
         </aside>
 
@@ -125,6 +126,58 @@
                         </span>
                         <input id="specularStrength" type="range" min="0" max="1" step="0.01" value="0.6">
                     </label>
+                    <label class="check-row">
+                        <input id="useTexture" type="checkbox">
+                        <span>Base-colour texture</span>
+                    </label>
+                    <label class="file-button">
+                        Upload Texture
+                        <input id="albedoFile" type="file" accept="image/png,image/jpeg">
+                    </label>
+                    <label>
+                        <span class="control-heading"><span>Wrap</span></span>
+                        <select id="textureWrap">
+                            <option value="repeat">Repeat</option>
+                            <option value="clamp">Clamp</option>
+                        </select>
+                    </label>
+                    <label>
+                        <span class="control-heading"><span>Filter</span></span>
+                        <select id="textureFilter">
+                            <option value="linear">Linear</option>
+                            <option value="nearest">Nearest</option>
+                        </select>
+                    </label>
+                    <label>
+                        <span class="control-heading">
+                            <span>Tile U</span>
+                            <span id="tileUValue">1.00</span>
+                        </span>
+                        <input id="tileU" type="range" min="0.25" max="8" step="0.05" value="1">
+                    </label>
+                    <label>
+                        <span class="control-heading">
+                            <span>Tile V</span>
+                            <span id="tileVValue">1.00</span>
+                        </span>
+                        <input id="tileV" type="range" min="0.25" max="8" step="0.05" value="1">
+                    </label>
+                    <p id="uvWarning" class="scene-note" hidden>This mesh has no UV coordinates, so the texture cannot be mapped.</p>
+                    <label class="check-row">
+                        <input id="useNormalMap" type="checkbox">
+                        <span>Normal map</span>
+                    </label>
+                    <label class="file-button">
+                        Upload Normal Map
+                        <input id="normalFile" type="file" accept="image/png,image/jpeg">
+                    </label>
+                    <label>
+                        <span class="control-heading">
+                            <span>Normal Strength</span>
+                            <span id="normalStrengthValue">1.00</span>
+                        </span>
+                        <input id="normalStrength" type="range" min="0" max="2" step="0.01" value="1">
+                    </label>
                 </div>
             </div>
 
@@ -132,34 +185,118 @@
                 <span class="control-heading">Display</span>
                 <div class="look-options">
                     <button type="button" id="showFaces" class="look-button">Face Colours</button>
-                    <button type="button" id="showNormals" class="look-button">Normals</button>
+                    <button type="button" id="showNormals" class="look-button">Geometric Normals</button>
                     <button type="button" id="showDiffuse" class="look-button">Diffuse Lighting</button>
                     <button type="button" id="showSpecular" class="look-button is-selected" aria-pressed="true">Diffuse + Specular</button>
+                    <button type="button" id="showUv" class="look-button">UV Coordinates</button>
+                    <button type="button" id="showLightingNormals" class="look-button">Lighting Normals</button>
+                    <button type="button" id="showSpecularOnly" class="look-button">Specular Only</button>
+                    <button type="button" id="showShadow" class="look-button">Shadow Map</button>
                 </div>
             </div>
 
             <div id="lightControls">
+                <span class="control-heading">Scene Lights</span>
+                <div id="lightList" class="scene-list"></div>
+                <div class="scene-actions">
+                    <button type="button" id="addLight">Add Point Light</button>
+                    <button type="button" id="removeLight">Remove Light</button>
+                </div>
+                <label class="check-row">
+                    <input id="lightEnabled" type="checkbox" checked>
+                    <span>Enabled</span>
+                </label>
                 <label>
-                    <span class="control-heading">
-                        <span>Light Direction X</span>
-                        <span id="lightXValue">0.40</span>
-                    </span>
-                    <input id="lightX" type="range" min="-1" max="1" step="0.01" value="0.4">
+                    <span class="control-heading"><span>Type</span></span>
+                    <select id="lightType">
+                        <option value="directional">Directional</option>
+                        <option value="point">Point</option>
+                        <option value="spot">Spotlight</option>
+                    </select>
                 </label>
                 <label>
                     <span class="control-heading">
-                        <span>Light Direction Y</span>
-                        <span id="lightYValue">1.00</span>
+                        <span>Colour</span>
+                        <span id="lightColorValue">#ffffff</span>
                     </span>
-                    <input id="lightY" type="range" min="-1" max="1" step="0.01" value="1">
+                    <input id="lightColor" type="color" value="#ffffff">
                 </label>
                 <label>
                     <span class="control-heading">
-                        <span>Light Direction Z</span>
-                        <span id="lightZValue">0.25</span>
+                        <span>Intensity</span>
+                        <span id="lightIntensityValue">1.00</span>
                     </span>
-                    <input id="lightZ" type="range" min="-1" max="1" step="0.01" value="0.25">
+                    <input id="lightIntensity" type="range" min="0" max="4" step="0.01" value="1">
                 </label>
+                <div id="directionFields">
+                    <label>
+                        <span class="control-heading">
+                            <span id="directionLabel">Direction X</span>
+                            <span id="dirXValue">0.45</span>
+                        </span>
+                        <input id="dirX" type="range" min="-1" max="1" step="0.01" value="0.45">
+                    </label>
+                    <label>
+                        <span class="control-heading">
+                            <span>Direction Y</span>
+                            <span id="dirYValue">1.00</span>
+                        </span>
+                        <input id="dirY" type="range" min="-1" max="1" step="0.01" value="1">
+                    </label>
+                    <label>
+                        <span class="control-heading">
+                            <span>Direction Z</span>
+                            <span id="dirZValue">0.20</span>
+                        </span>
+                        <input id="dirZ" type="range" min="-1" max="1" step="0.01" value="0.2">
+                    </label>
+                </div>
+                <div id="positionFields" hidden>
+                    <label>
+                        <span class="control-heading">
+                            <span>Position X</span>
+                            <span id="lightPosXValue">0.00</span>
+                        </span>
+                        <input id="lightPosX" type="range" min="-4" max="4" step="0.01" value="0">
+                    </label>
+                    <label>
+                        <span class="control-heading">
+                            <span>Position Y</span>
+                            <span id="lightPosYValue">1.00</span>
+                        </span>
+                        <input id="lightPosY" type="range" min="-4" max="4" step="0.01" value="1">
+                    </label>
+                    <label>
+                        <span class="control-heading">
+                            <span>Position Z</span>
+                            <span id="lightPosZValue">0.00</span>
+                        </span>
+                        <input id="lightPosZ" type="range" min="-4" max="4" step="0.01" value="0">
+                    </label>
+                    <label>
+                        <span class="control-heading">
+                            <span>Range</span>
+                            <span id="lightRangeValue">4.00</span>
+                        </span>
+                        <input id="lightRange" type="range" min="0.5" max="12" step="0.05" value="4">
+                    </label>
+                </div>
+                <div id="spotFields" hidden>
+                    <label>
+                        <span class="control-heading">
+                            <span>Inner Angle</span>
+                            <span id="innerAngleValue">12°</span>
+                        </span>
+                        <input id="innerAngle" type="range" min="0" max="70" step="1" value="12">
+                    </label>
+                    <label>
+                        <span class="control-heading">
+                            <span>Outer Angle</span>
+                            <span id="outerAngleValue">26°</span>
+                        </span>
+                        <input id="outerAngle" type="range" min="1" max="80" step="1" value="26">
+                    </label>
+                </div>
                 <label>
                     <span class="control-heading">
                         <span>Ambient</span>
@@ -183,6 +320,37 @@
                 </label>
             </div>
 
+            <div id="shadowControls">
+                <span class="control-heading">Shadows</span>
+                <label class="check-row">
+                    <input id="shadowsEnabled" type="checkbox" checked>
+                    <span>Directional shadows</span>
+                </label>
+                <label>
+                    <span class="control-heading"><span>Resolution</span></span>
+                    <select id="shadowResolution">
+                        <option value="512">512</option>
+                        <option value="1024" selected>1024</option>
+                        <option value="2048">2048</option>
+                    </select>
+                </label>
+                <label>
+                    <span class="control-heading">
+                        <span>Bias</span>
+                        <span id="shadowBiasValue">0.0020</span>
+                    </span>
+                    <input id="shadowBias" type="range" min="0" max="0.02" step="0.0005" value="0.002">
+                </label>
+                <label>
+                    <span class="control-heading">
+                        <span>Softness</span>
+                        <span id="shadowSoftnessValue">1</span>
+                    </span>
+                    <input id="shadowSoftness" type="range" min="0" max="2" step="1" value="1">
+                </label>
+            </div>
+
+            <span class="control-heading">Camera</span>
             <label>
                 <span class="control-heading">
                     <span>Camera X</span>

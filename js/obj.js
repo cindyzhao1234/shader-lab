@@ -1,7 +1,8 @@
-// An OBJ file is a text list of positions, optional normals, and faces.
-// A face names corners by index. Position index 1 is the first "v" line.
-// A negative index counts backward from the end.
-// WebGL wants one index per combined vertex, so this loader welds position/normal pairs.
+import { FLOATS_PER_VERTEX, writeTangents } from "./geometry.js";
+
+// An OBJ file is a text list of positions, optional texture coordinates, optional normals, and faces.
+// A face names corners by index. Position index 1 is the first "v" line. A negative index counts from the end.
+// Position, UV, and normal indices are separate, so this loader welds each unique trio into one GPU vertex.
 
 function resolveIndex(index, length)
 {
@@ -24,9 +25,15 @@ function parseCorner(token)
 {
     const bits = token.split("/");
     const position = Number(bits[0]);
+    let uv = null;
     let normal = null;
 
-    // v/vt/vn and v//vn both put the normal in the third slot.
+    // v/vt, v/vt/vn, and v//vn. An empty slot means that index is absent.
+    if (bits.length >= 2 && bits[1] !== "")
+    {
+        uv = Number(bits[1]);
+    }
+
     if (bits.length >= 3 && bits[2] !== "")
     {
         normal = Number(bits[2]);
@@ -34,6 +41,7 @@ function parseCorner(token)
 
     return {
         position: position,
+        uv: uv,
         normal: normal
     };
 }
@@ -94,7 +102,7 @@ export function fitMesh(vertices, targetSize)
     const min = [Infinity, Infinity, Infinity];
     const max = [-Infinity, -Infinity, -Infinity];
 
-    for (let index = 0; index < vertices.length; index += 9)
+    for (let index = 0; index < vertices.length; index += FLOATS_PER_VERTEX)
     {
         for (let axis = 0; axis < 3; axis++)
         {
@@ -106,7 +114,7 @@ export function fitMesh(vertices, targetSize)
     const size = Math.max(max[0] - min[0], max[1] - min[1], max[2] - min[2]) || 1;
     const scale = targetSize / size;
 
-    for (let index = 0; index < vertices.length; index += 9)
+    for (let index = 0; index < vertices.length; index += FLOATS_PER_VERTEX)
     {
         for (let axis = 0; axis < 3; axis++)
         {
@@ -123,6 +131,7 @@ export function fitMesh(vertices, targetSize)
 export function parseObj(text)
 {
     const positions = [];
+    const uvs = [];
     const normals = [];
     const triangles = [];
     const lines = text.split(/\r?\n/);
@@ -143,6 +152,10 @@ export function parseObj(text)
         {
             positions.push([Number(parts[1]), Number(parts[2]), Number(parts[3])]);
         }
+        else if (tag === "vt" && parts.length >= 3)
+        {
+            uvs.push([Number(parts[1]), Number(parts[2])]);
+        }
         else if (tag === "vn" && parts.length >= 4)
         {
             normals.push([Number(parts[1]), Number(parts[2]), Number(parts[3])]);
@@ -156,9 +169,9 @@ export function parseObj(text)
             for (let index = 1; index < corners.length - 1; index++)
             {
                 triangles.push([
-                    { position: corners[0].position, normal: corners[0].normal },
-                    { position: corners[index].position, normal: corners[index].normal },
-                    { position: corners[index + 1].position, normal: corners[index + 1].normal }
+                    { position: corners[0].position, uv: corners[0].uv, normal: corners[0].normal },
+                    { position: corners[index].position, uv: corners[index].uv, normal: corners[index].normal },
+                    { position: corners[index + 1].position, uv: corners[index + 1].uv, normal: corners[index + 1].normal }
                 ]);
             }
         }
@@ -175,12 +188,19 @@ export function parseObj(text)
         {
             corner.position = resolveIndex(corner.position, positions.length);
 
+            if (corner.uv !== null)
+            {
+                corner.uv = resolveIndex(corner.uv, uvs.length);
+            }
+
             if (corner.normal !== null)
             {
                 corner.normal = resolveIndex(corner.normal, normals.length);
             }
         });
     });
+
+    const hasUvs = triangles.some((triangle) => triangle.some((corner) => corner.uv !== null));
 
     const missingNormal = triangles.some((triangle) =>
     {
@@ -196,18 +216,22 @@ export function parseObj(text)
         triangle.forEach((corner) =>
         {
             const normalIndex = generated ? corner.position : corner.normal;
-            const key = corner.position + "/" + normalIndex;
+            const uvIndex = corner.uv === null ? "none" : corner.uv;
+            const key = corner.position + "/" + uvIndex + "/" + normalIndex;
 
             if (!welded.has(key))
             {
                 const position = positions[corner.position];
                 const normal = generated ? generated[corner.position] : normals[corner.normal];
+                const uv = corner.uv === null ? [0, 0] : uvs[corner.uv];
 
-                welded.set(key, vertexValues.length / 9);
+                welded.set(key, vertexValues.length / FLOATS_PER_VERTEX);
                 vertexValues.push(
                     position[0], position[1], position[2],
                     0.75, 0.75, 0.78,
-                    normal[0], normal[1], normal[2]
+                    normal[0], normal[1], normal[2],
+                    uv[0], uv[1],
+                    1, 0, 0, 1
                 );
             }
 
@@ -215,10 +239,14 @@ export function parseObj(text)
         });
     });
 
-    const IndexArray = vertexValues.length / 9 > 65535 ? Uint32Array : Uint16Array;
+    const IndexArray = vertexValues.length / FLOATS_PER_VERTEX > 65535 ? Uint32Array : Uint16Array;
+    const vertices = new Float32Array(vertexValues);
+    const indices = new IndexArray(indexValues);
+    writeTangents(vertices, indices);
 
     return {
-        vertices: new Float32Array(vertexValues),
-        indices: new IndexArray(indexValues)
+        vertices: vertices,
+        indices: indices,
+        hasUvs: hasUvs
     };
 }

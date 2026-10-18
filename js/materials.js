@@ -36,7 +36,16 @@ export function copyMaterial(material)
     return {
         baseColor: material.baseColor.slice(),
         specularStrength: material.specularStrength,
-        shininess: material.shininess
+        shininess: material.shininess,
+        useTexture: Boolean(material.useTexture),
+        wrapRepeat: material.wrapRepeat !== false,
+        filterLinear: material.filterLinear !== false,
+        tileU: material.tileU === undefined ? 1 : material.tileU,
+        tileV: material.tileV === undefined ? 1 : material.tileV,
+        albedo: material.albedo || null,
+        useNormalMap: Boolean(material.useNormalMap),
+        normalStrength: material.normalStrength === undefined ? 1 : material.normalStrength,
+        normalMap: material.normalMap || null
     };
 }
 

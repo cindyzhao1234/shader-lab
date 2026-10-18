@@ -149,6 +149,61 @@ export function perspectiveMatrix(fovRadians, aspect, near, far)
     ]);
 }
 
+// Inverse-transpose of the model matrix's 3×3.
+// A uniform scale can use the model matrix itself. A non-uniform scale would tilt a plain
+// mat3 normal, so this keeps the normal perpendicular to the scaled surface.
+export function normalMatrix(model)
+{
+    const a = model[0];
+    const b = model[1];
+    const c = model[2];
+    const d = model[4];
+    const e = model[5];
+    const f = model[6];
+    const g = model[8];
+    const h = model[9];
+    const i = model[10];
+
+    const c00 = e * i - f * h;
+    const c01 = c * h - b * i;
+    const c02 = b * f - c * e;
+    const c10 = f * g - d * i;
+    const c11 = a * i - c * g;
+    const c12 = c * d - a * f;
+    const c20 = d * h - e * g;
+    const c21 = b * g - a * h;
+    const c22 = a * e - b * d;
+    const det = a * c00 + d * c01 + g * c02;
+
+    if (Math.abs(det) < 0.0000001)
+    {
+        return new Float32Array([1, 0, 0, 0, 1, 0, 0, 0, 1]);
+    }
+
+    const inv = 1 / det;
+
+    return new Float32Array([
+        c00 * inv, c10 * inv, c20 * inv,
+        c01 * inv, c11 * inv, c21 * inv,
+        c02 * inv, c12 * inv, c22 * inv
+    ]);
+}
+
+// An orthographic box. Directional shadow maps use this instead of a perspective lens.
+export function orthoMatrix(left, right, bottom, top, near, far)
+{
+    const rl = right - left;
+    const tb = top - bottom;
+    const fn = far - near;
+
+    return new Float32Array([
+        2 / rl, 0, 0, 0,
+        0, 2 / tb, 0, 0,
+        0, 0, -2 / fn, 0,
+        -(right + left) / rl, -(top + bottom) / tb, -(far + near) / fn, 1
+    ]);
+}
+
 // Returns a * b. Applied to a vertex, b happens first and a happens second.
 export function multiplyMatrices(a, b)
 {
