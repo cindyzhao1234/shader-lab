@@ -1,0 +1,76 @@
+/*
+ * Design tokens — a cozy, modern creative studio.
+ *
+ * Warm neutrals rather than the blue-grey of a developer tool, a single clay
+ * accent used sparingly, and soft warm-tinted shadows. Stage 1 builds the
+ * component library on top of these; nothing downstream should hardcode a
+ * colour.
+ */
+
+:root {
+  /* Surfaces, warmest at the back */
+  --surface-page: #f4f0ea;
+  --surface-panel: #faf8f5;
+  --surface-raised: #ffffff;
+  --surface-sunken: #ece7df;
+  --surface-viewport: #463e37;
+
+  /* Ink */
+  --text-primary: #2a2622;
+  --text-secondary: #6b6259;
+  --text-tertiary: #9a9087;
+  --text-on-dark: #f6f2ec;
+  --text-on-accent: #fffaf6;
+
+  /* A single accent. Used for selection and primary actions, nothing else. */
+  --accent: #c06a42;
+  --accent-hover: #a95a34;
+  --accent-soft: #f6e6dc;
+
+  /* Structure */
+  --stroke: #e4ded5;
+  --stroke-strong: #d3cabd;
+  --stroke-focus: #c06a42;
+
+  /* Feedback */
+  --warning: #9a6b1f;
+  --warning-soft: #fbf0d8;
+  --danger: #a4402f;
+  --danger-soft: #f9e4e0;
+
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  /* Warm-tinted rather than neutral black, so shadows sit in the palette. */
+  --shadow-sm: 0 1px 2px rgba(74, 58, 44, 0.06);
+  --shadow-md: 0 2px 8px rgba(74, 58, 44, 0.08);
+  --shadow-lg: 0 8px 28px rgba(74, 58, 44, 0.12);
+
+  --font-ui: "Inter var", "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-base: 13px;
+  --text-lg: 15px;
+  --text-xl: 19px;
+
+  --ease: cubic-bezier(0.2, 0, 0.1, 1);
+  --duration: 160ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration: 0ms;
+  }
+}
