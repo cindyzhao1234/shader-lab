@@ -1,4 +1,4 @@
-import { useRef, type KeyboardEvent } from "react";
+import { useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
 
 /**
  * A tab list following the WAI-ARIA tabs pattern: one tab in the tab order,
@@ -33,6 +33,24 @@ export function tabPanelProps(idBase: string, id: string) {
 
 export function Tabs<T extends string>({ idBase, label, items, value, onChange }: TabsProps<T>) {
   const listRef = useRef<HTMLDivElement | null>(null);
+  const [indicator, setIndicator] = useState<{ left: number; width: number } | null>(null);
+
+  // The indicator slides between tabs, so it is positioned from the selected
+  // tab's measured box rather than drawn by each tab.
+  useLayoutEffect(() => {
+    const list = listRef.current;
+    if (!list) return;
+
+    const measure = () => {
+      const tab = list.querySelector<HTMLElement>('[aria-selected="true"]');
+      if (tab) setIndicator({ left: tab.offsetLeft + 10, width: Math.max(tab.offsetWidth - 20, 12) });
+    };
+
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(list);
+    return () => observer.disconnect();
+  }, [value, items]);
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     const index = items.findIndex((item) => item.id === value);
@@ -74,6 +92,13 @@ export function Tabs<T extends string>({ idBase, label, items, value, onChange }
           </button>
         );
       })}
+      {indicator && (
+        <span
+          className="tabs__indicator"
+          aria-hidden="true"
+          style={{ width: indicator.width, transform: `translateX(${indicator.left}px)` }}
+        />
+      )}
     </div>
   );
 }

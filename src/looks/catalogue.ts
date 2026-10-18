@@ -25,6 +25,8 @@ export interface LookSummary {
    * These describe the Look's mood; they are not a render of it.
    */
   palette: readonly [string, string, string];
+  /** The Look's colour in the studio's own interface: its tape and seal. */
+  accent: string;
 }
 
 export const LOOKS: readonly LookSummary[] = [
@@ -37,6 +39,7 @@ export const LOOKS: readonly LookSummary[] = [
     availability: "available",
     controls: [],
     palette: ["#8f8a80", "#c9c2b6", "#4a453f"],
+    accent: "#f8d978",
   },
   {
     id: "cartoon",
@@ -53,6 +56,7 @@ export const LOOKS: readonly LookSummary[] = [
       "Highlight Strength",
     ],
     palette: ["#f2b33d", "#3d7be0", "#1d1b22"],
+    accent: "#a9d9f5",
   },
   {
     id: "dreamy",
@@ -62,6 +66,7 @@ export const LOOKS: readonly LookSummary[] = [
     availability: "planned",
     controls: ["Dreaminess", "Glow", "Warmth", "Softness", "Haze"],
     palette: ["#f6c7d4", "#f8e3b8", "#b9b4e8"],
+    accent: "#f2a7c3",
   },
   {
     id: "retro",
@@ -71,6 +76,7 @@ export const LOOKS: readonly LookSummary[] = [
     availability: "planned",
     controls: ["Pixel Size", "Colour Count", "Dithering", "Contrast", "Retro Palette"],
     palette: ["#2f8f6f", "#e2d36b", "#2a2140"],
+    accent: "#9fdcc0",
   },
   {
     id: "painterly",
@@ -80,6 +86,7 @@ export const LOOKS: readonly LookSummary[] = [
     availability: "planned",
     controls: ["Brush Feel", "Detail", "Colour Variation", "Texture Strength"],
     palette: ["#c9844f", "#6d8f9e", "#efe4cf"],
+    accent: "#f6c08e",
   },
   {
     id: "cinematic",
@@ -89,6 +96,7 @@ export const LOOKS: readonly LookSummary[] = [
     availability: "planned",
     controls: ["Exposure", "Contrast", "Mood", "Warmth", "Bloom"],
     palette: ["#1f3a4a", "#e08a4b", "#0d0f12"],
+    accent: "#c9b8ef",
   },
   {
     id: "flat",
@@ -98,6 +106,7 @@ export const LOOKS: readonly LookSummary[] = [
     availability: "planned",
     controls: ["Colour Simplicity", "Outline Thickness", "Shadow Strength"],
     palette: ["#e86a5c", "#f3ede2", "#3a5a78"],
+    accent: "#f39a8f",
   },
 ];
 

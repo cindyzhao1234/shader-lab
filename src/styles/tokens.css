@@ -1,56 +1,75 @@
 /*
- * Design tokens — a cozy, modern creative studio.
+ * Design tokens — an artbook sticker studio.
  *
- * Warm neutrals rather than the blue-grey of a developer tool, a single clay
- * accent used sparingly, and soft warm-tinted shadows. Nothing downstream
- * should hardcode a colour.
+ * Warm cream paper, midnight-navy ink for text and outlines, and pastel
+ * fills (strawberry, butter, powder blue). Pastels are fills only: anything
+ * that has to be read uses ink or one of the deeper "-ink" variants, which
+ * keep AA contrast on cream. Nothing downstream should hardcode a colour.
  *
- * Two typefaces: Inter for the interface, Fraunces for Look names and the
- * few editorial headings. Fraunces is never used for controls or data.
+ * Two typefaces: Bricolage Grotesque for display (headings, Look names,
+ * numerals, the wordmark) and Nunito Sans for the interface.
  */
 
 :root {
-  /* Surfaces, warmest at the back */
-  --surface-page: #efe9e1;
-  --surface-panel: #faf7f3;
-  --surface-raised: #ffffff;
-  --surface-sunken: #f1ece5;
-  --surface-hover: #f3eee7;
-  --surface-selected: #f6e8de;
-  --surface-viewport: #463e37;
-  --surface-glass: rgba(34, 29, 25, 0.58);
-  --surface-glass-strong: rgba(34, 29, 25, 0.82);
+  /* Paper, from the desk up */
+  --paper: #fff8ec;
+  --paper-raised: #fffdf7;
+  --paper-sunken: #f8eedd;
+  --paper-deep: #f1e2c9;
+  --paper-hover: #fbf1e0;
 
   /* Ink */
-  --text-primary: #2a2622;
-  --text-secondary: #6b6259;
-  --text-tertiary: #9a9087;
-  --text-on-dark: #f6f2ec;
-  --text-on-dark-muted: rgba(246, 242, 236, 0.62);
-  --text-on-accent: #fffaf6;
+  --ink: #171d35;
+  --ink-soft: #464c69;
+  --ink-faint: #60647f;
+  --ink-line: rgba(23, 29, 53, 0.16);
+  --ink-hairline: rgba(23, 29, 53, 0.1);
 
-  /* A single accent. Used for selection and primary actions, nothing else. */
-  --accent: #c06a42;
-  --accent-hover: #a95a34;
-  --accent-pressed: #934c2b;
-  --accent-soft: #f6e6dc;
-  --accent-ring: rgba(192, 106, 66, 0.32);
+  /* Pastel fills and their legible inks */
+  --strawberry: #f2a7c3;
+  --strawberry-soft: #fbe1eb;
+  --strawberry-ink: #a8365f;
+  --butter: #f8d978;
+  --butter-soft: #fdf0c4;
+  --gold: #d9a52b;
+  --gold-ink: #8a6410;
+  --powder: #a9d9f5;
+  --powder-soft: #dff0fb;
+  --powder-ink: #2c6e99;
 
-  /* Structure */
-  --stroke: #e6dfd6;
-  --stroke-strong: #d6ccbf;
-  --stroke-focus: #c06a42;
-  --stroke-on-dark: rgba(255, 248, 240, 0.12);
+  /* The 3D view. Matches the renderer's backdrop so the canvas never flashes. */
+  --viewport: #404556;
+  --viewport-ink: #fff8ec;
+  --viewport-ink-muted: rgba(255, 248, 236, 0.66);
 
-  /* Feedback */
-  --warning: #8a5d14;
-  --warning-soft: #fbf0d8;
-  --danger: #a4402f;
-  --danger-soft: #f9e4e0;
+  /* Semantic aliases */
+  --surface-page: var(--paper);
+  --surface-panel: var(--paper-raised);
+  --surface-raised: #ffffff;
+  --surface-sunken: var(--paper-sunken);
+  --surface-hover: var(--paper-hover);
+  --surface-viewport: var(--viewport);
+
+  --text-primary: var(--ink);
+  --text-secondary: var(--ink-soft);
+  --text-tertiary: var(--ink-faint);
+  --text-on-dark: var(--viewport-ink);
+  --text-on-dark-muted: var(--viewport-ink-muted);
+
+  --accent: var(--butter);
+  --accent-ink: var(--gold-ink);
+  --focus: var(--gold-ink);
+
+  --stroke: var(--ink-line);
+  --stroke-strong: var(--ink);
+  --outline: 1.5px solid var(--ink);
+
+  --warning: #7a560c;
+  --warning-soft: var(--butter-soft);
 
   --radius-xs: 4px;
   --radius-sm: 6px;
-  --radius-md: 8px;
+  --radius-md: 9px;
   --radius-lg: 12px;
   --radius-xl: 16px;
   --radius-2xl: 20px;
@@ -65,15 +84,16 @@
   --space-8: 32px;
   --space-10: 40px;
 
-  /* Warm-tinted rather than neutral black, so shadows sit in the palette. */
-  --shadow-sm: 0 1px 2px rgba(74, 58, 44, 0.06);
-  --shadow-md: 0 2px 8px rgba(74, 58, 44, 0.08);
-  --shadow-lg: 0 10px 32px rgba(74, 58, 44, 0.14);
-  --shadow-xl: 0 24px 64px rgba(52, 38, 28, 0.22);
-  --shadow-panel: 0 1px 2px rgba(74, 58, 44, 0.05), 0 8px 24px rgba(74, 58, 44, 0.05);
+  /* Hard offset "sticker" shadows: ink, no blur. */
+  --sticker-xs: 1.5px 1.5px 0 var(--ink);
+  --sticker-sm: 2px 2px 0 var(--ink);
+  --sticker: 3px 3px 0 var(--ink);
+  --sticker-lg: 5px 5px 0 var(--ink);
+  /* Soft shadows, kept for things that float above everything. */
+  --shadow-float: 0 12px 32px rgba(23, 29, 53, 0.18);
 
-  --font-ui: "InterVariable", "Inter var", "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
-  --font-display: "Fraunces", "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  --font-ui: "Nunito Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-display: "Bricolage Grotesque", "Nunito Sans", ui-sans-serif, system-ui, sans-serif;
   --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
 
   --text-xs: 11px;
@@ -83,12 +103,22 @@
   --text-lg: 16px;
   --text-xl: 20px;
   --text-2xl: 26px;
-  --text-3xl: 34px;
+  --text-3xl: 38px;
 
   --ease: cubic-bezier(0.2, 0, 0.1, 1);
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
   --duration: 160ms;
   --duration-slow: 280ms;
+
+  /* Washi tape with torn ends. */
+  --tape-clip: polygon(
+    0 8%, 4% 0, 8% 10%, 12% 0, 88% 0, 92% 10%, 96% 0, 100% 8%,
+    100% 92%, 96% 100%, 92% 90%, 88% 100%, 12% 100%, 8% 90%, 4% 100%, 0 92%
+  );
+
+  /* Faint paper fibre, for the welcome spread. */
+  --paper-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.09 0 0 0 0 0.11 0 0 0 0 0.21 0 0 0 0.05 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
 @media (prefers-reduced-motion: reduce) {

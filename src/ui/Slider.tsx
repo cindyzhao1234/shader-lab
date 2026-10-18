@@ -22,7 +22,6 @@ interface SliderProps {
   hint?: string;
   onChange: (value: number) => void;
   onCommit?: () => void;
-  tone?: "default" | "onDark";
 }
 
 export function Slider({
@@ -36,7 +35,6 @@ export function Slider({
   hint,
   onChange,
   onCommit,
-  tone = "default",
 }: SliderProps) {
   const id = useId();
   const style = { "--fill": `${fillPercent(value, min, max)}%` } as CSSProperties;
@@ -61,7 +59,7 @@ export function Slider({
   );
 
   return (
-    <div className={tone === "onDark" ? "slider slider--on-dark" : "slider"}>
+    <div className="slider">
       <div className="slider__header">
         <label htmlFor={id} className="slider__label">
           {label}

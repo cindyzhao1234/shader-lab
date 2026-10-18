@@ -14,8 +14,8 @@ import { TopBar } from "./workspace/TopBar";
 import { Viewport } from "./workspace/Viewport";
 import { WelcomeDialog } from "./workspace/WelcomeDialog";
 
-/** Outer padding plus the two gutters between panels and viewport. */
-const CHROME_WIDTH = 12 * 2 + 12 * 2;
+/** Outer padding, the two gutters between panels and viewport, and the viewport's frame. Matches app.css. */
+const CHROME_WIDTH = 14 * 2 + 14 * 2 + 2 * 2;
 
 export default function App() {
   const [store] = useState(() => new WorkspaceStore({ projectName: "My First Look" }));

@@ -35,6 +35,13 @@ describe("Look catalogue", () => {
     }
   });
 
+  it("gives every Look its own accent colour", () => {
+    for (const look of LOOKS) {
+      expect(look.accent, look.name).toMatch(/^#[0-9a-f]{6}$/);
+    }
+    expect(new Set(LOOKS.map((look) => look.accent)).size).toBe(LOOKS.length);
+  });
+
   it("names the beginner controls from the product brief", () => {
     expect(findLook("cartoon")?.controls).toEqual([
       "Outline Thickness",

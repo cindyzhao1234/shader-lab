@@ -3,7 +3,7 @@ import { Button, IconButton } from "../ui/Button";
 import { Icon } from "../ui/Icon";
 import { Tooltip } from "../ui/Tooltip";
 import { IS_MAC, useWorkspace, useWorkspaceStore } from "./context";
-import { LogoMark } from "./LogoMark";
+import { LogoMark, Wordmark } from "./LogoMark";
 import { shortcutKeys } from "./shortcuts";
 
 interface TopBarProps {
@@ -41,7 +41,7 @@ export function TopBar({
     <header className="topbar">
       <div className="topbar__brand">
         <LogoMark />
-        {!compact && <span className="topbar__wordmark">Game Look Lab</span>}
+        {!compact && <Wordmark />}
       </div>
 
       <span className="topbar__divider" aria-hidden="true" />

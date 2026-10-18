@@ -12,11 +12,10 @@ interface PopoverProps {
   trigger: (props: { "aria-expanded": boolean; "aria-controls": string; onClick: () => void }) => ReactNode;
   label: string;
   align?: "start" | "end";
-  tone?: "default" | "onDark";
   children: ReactNode;
 }
 
-export function Popover({ open, onOpenChange, trigger, label, align = "start", tone = "default", children }: PopoverProps) {
+export function Popover({ open, onOpenChange, trigger, label, align = "start", children }: PopoverProps) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const id = useId();
 
@@ -52,13 +51,7 @@ export function Popover({ open, onOpenChange, trigger, label, align = "start", t
           id={id}
           role="dialog"
           aria-label={label}
-          className={[
-            "popover__panel",
-            `popover__panel--${align}`,
-            tone === "onDark" && "popover__panel--on-dark",
-          ]
-            .filter(Boolean)
-            .join(" ")}
+          className={`popover__panel popover__panel--${align}`}
         >
           {children}
         </div>

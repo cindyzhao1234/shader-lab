@@ -1,4 +1,4 @@
-import { useState, type RefObject } from "react";
+import { useState, type CSSProperties, type RefObject } from "react";
 import type { StageStats } from "../render/stage";
 import { FOV_RANGE } from "../render/stage";
 import { findLook } from "../looks/catalogue";
@@ -49,14 +49,12 @@ export function Viewport({ canvasRef, stats, loading, showStats, onToggleStats }
           icon="focus"
           label="Focus selection"
           shortcut={shortcutKeys("focus", IS_MAC)}
-          tone="onDark"
           onClick={() => store.focus()}
         />
         <IconButton
           icon="reset"
           label="Return to starting view"
           shortcut={shortcutKeys("resetView", IS_MAC)}
-          tone="onDark"
           onClick={() => store.resetView()}
         />
         <span className="viewport__toolbar-divider" aria-hidden="true" />
@@ -64,13 +62,11 @@ export function Viewport({ canvasRef, stats, loading, showStats, onToggleStats }
           open={cameraOpen}
           onOpenChange={setCameraOpen}
           label="Camera"
-          tone="onDark"
           trigger={(props) => (
-            <IconButton icon="camera" label="Camera" tone="onDark" pressed={cameraOpen} {...props} />
+            <IconButton icon="camera" label="Camera" pressed={cameraOpen} {...props} />
           )}
         >
           <Slider
-            tone="onDark"
             label="Field of view"
             value={Math.round(fov)}
             min={FOV_RANGE.min}
@@ -86,15 +82,16 @@ export function Viewport({ canvasRef, stats, loading, showStats, onToggleStats }
         <IconButton
           icon="gauge"
           label={showStats ? "Hide performance" : "Show performance"}
-          tone="onDark"
           pressed={showStats}
           onClick={onToggleStats}
         />
       </div>
 
       {look && (
-        <div className="viewport__look" aria-live="polite">
-          <Icon name="sparkles" size={14} />
+        <div className="viewport__look" aria-live="polite" style={{ "--look-accent": look.accent } as CSSProperties}>
+          <span className="viewport__look-gem" aria-hidden="true">
+            <Icon name="star" size={11} />
+          </span>
           <span className="viewport__look-label">Look</span>
           <span className="viewport__look-name">{look.name}</span>
         </div>

@@ -93,7 +93,6 @@ interface IconButtonProps extends BaseProps {
   /** For toggles: rendered pressed and announced via aria-pressed. */
   pressed?: boolean;
   size?: ButtonSize;
-  tone?: "default" | "onDark";
   tooltipSide?: TooltipSide;
 }
 
@@ -103,7 +102,6 @@ export function IconButton({
   shortcut,
   pressed,
   size = "md",
-  tone = "default",
   unavailable,
   tooltipSide,
   className,
@@ -118,7 +116,6 @@ export function IconButton({
         className={classes(
           "icon-button",
           `icon-button--${size}`,
-          tone === "onDark" && "icon-button--on-dark",
           pressed && "is-pressed",
           unavailable && "is-unavailable",
           className,
