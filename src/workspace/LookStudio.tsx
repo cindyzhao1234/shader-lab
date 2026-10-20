@@ -11,13 +11,8 @@ export function LookStudio() {
   return (
     <div className="sidebar__inner">
       <div className="sidebar__head studio-head">
-        <p className="eyebrow">
-          <Icon name="star" size={11} />
-          Look Studio
-        </p>
-        <h2 className="studio-head__title">
-          Choose a <span className="highlight">Look</span>
-        </h2>
+        <p className="eyebrow">Look Studio</p>
+        <h2 className="studio-head__title">Choose a Look</h2>
         <p className="sidebar__subtitle">
           A Look changes how your scene is drawn. Your models and materials always stay as they are.
         </p>
@@ -49,7 +44,7 @@ export function LookStudio() {
 
             {active.controls.length === 0 && (
               <div className="look-details__note">
-                <Icon name="sparkles" size={16} />
+                <Icon name="info" size={16} />
                 <p>
                   Original has nothing to adjust. When stylised Looks arrive, their controls will appear here.
                 </p>

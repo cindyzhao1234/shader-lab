@@ -1,78 +1,68 @@
 /*
- * Design tokens — an artbook sticker studio.
+ * Design tokens — Midnight Rose.
  *
- * Warm cream paper, midnight-navy ink for text and outlines, and pastel
- * fills (strawberry, butter, powder blue). Pastels are fills only: anything
- * that has to be read uses ink or one of the deeper "-ink" variants, which
- * keep AA contrast on cream. Nothing downstream should hardcode a colour.
+ * Deep blue surfaces, ice-white text, silver for structure and a single rose
+ * accent for selection, primary actions and focus. Rose is used sparingly:
+ * if everything is pink, nothing is selected. Nothing downstream should
+ * hardcode a colour.
  *
- * Two typefaces: Bricolage Grotesque for display (headings, Look names,
- * numerals, the wordmark) and Nunito Sans for the interface.
+ * Two typefaces: Space Grotesk for headings and the brand, Manrope for the
+ * interface.
  */
 
 :root {
-  /* Paper, from the desk up */
-  --paper: #fff8ec;
-  --paper-raised: #fffdf7;
-  --paper-sunken: #f8eedd;
-  --paper-deep: #f1e2c9;
-  --paper-hover: #fbf1e0;
+  /* Surfaces, from the back forward */
+  --midnight: #10182b;
+  --navy: #19243c;
+  --slate: #27344c;
+  --slate-hover: #2f3d57;
+  --slate-active: #374663;
 
-  /* Ink */
-  --ink: #171d35;
-  --ink-soft: #464c69;
-  --ink-faint: #60647f;
-  --ink-line: rgba(23, 29, 53, 0.16);
-  --ink-hairline: rgba(23, 29, 53, 0.1);
+  /* Text and structure */
+  --ice: #edf2fa;
+  --silver: #b8c5d6;
+  --silver-muted: #909db4;
+  --hairline: rgba(184, 197, 214, 0.12);
+  --line: rgba(184, 197, 214, 0.2);
+  --line-strong: rgba(184, 197, 214, 0.34);
 
-  /* Pastel fills and their legible inks */
-  --strawberry: #f2a7c3;
-  --strawberry-soft: #fbe1eb;
-  --strawberry-ink: #a8365f;
-  --butter: #f8d978;
-  --butter-soft: #fdf0c4;
-  --gold: #d9a52b;
-  --gold-ink: #8a6410;
-  --powder: #a9d9f5;
-  --powder-soft: #dff0fb;
-  --powder-ink: #2c6e99;
+  /* The accent */
+  --rose: #e88fb7;
+  --rose-soft: #f5bbd4;
+  --rose-press: #dd7ea9;
+  --rose-tint: rgba(232, 143, 183, 0.12);
+  --rose-tint-strong: rgba(232, 143, 183, 0.2);
+  --rose-line: rgba(232, 143, 183, 0.55);
 
   /* The 3D view. Matches the renderer's backdrop so the canvas never flashes. */
-  --viewport: #404556;
-  --viewport-ink: #fff8ec;
-  --viewport-ink-muted: rgba(255, 248, 236, 0.66);
+  --viewport: #1f2940;
 
   /* Semantic aliases */
-  --surface-page: var(--paper);
-  --surface-panel: var(--paper-raised);
-  --surface-raised: #ffffff;
-  --surface-sunken: var(--paper-sunken);
-  --surface-hover: var(--paper-hover);
+  --surface-page: var(--midnight);
+  --surface-panel: var(--navy);
+  --surface-raised: var(--slate);
+  --surface-hover: var(--slate);
   --surface-viewport: var(--viewport);
+  --surface-overlay: rgba(25, 36, 60, 0.94);
 
-  --text-primary: var(--ink);
-  --text-secondary: var(--ink-soft);
-  --text-tertiary: var(--ink-faint);
-  --text-on-dark: var(--viewport-ink);
-  --text-on-dark-muted: var(--viewport-ink-muted);
+  --text-primary: var(--ice);
+  --text-secondary: var(--silver);
+  --text-tertiary: var(--silver-muted);
+  --text-on-accent: var(--midnight);
 
-  --accent: var(--butter);
-  --accent-ink: var(--gold-ink);
-  --focus: var(--gold-ink);
+  --accent: var(--rose);
+  --accent-hover: var(--rose-soft);
+  --focus: var(--rose);
 
-  --stroke: var(--ink-line);
-  --stroke-strong: var(--ink);
-  --outline: 1.5px solid var(--ink);
+  --stroke: var(--line);
+  --stroke-subtle: var(--hairline);
+  --stroke-strong: var(--line-strong);
 
-  --warning: #7a560c;
-  --warning-soft: var(--butter-soft);
-
-  --radius-xs: 4px;
-  --radius-sm: 6px;
-  --radius-md: 9px;
-  --radius-lg: 12px;
-  --radius-xl: 16px;
-  --radius-2xl: 20px;
+  --radius-xs: 3px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 10px;
   --radius-full: 999px;
 
   --space-1: 4px;
@@ -84,16 +74,12 @@
   --space-8: 32px;
   --space-10: 40px;
 
-  /* Hard offset "sticker" shadows: ink, no blur. */
-  --sticker-xs: 1.5px 1.5px 0 var(--ink);
-  --sticker-sm: 2px 2px 0 var(--ink);
-  --sticker: 3px 3px 0 var(--ink);
-  --sticker-lg: 5px 5px 0 var(--ink);
-  /* Soft shadows, kept for things that float above everything. */
-  --shadow-float: 0 12px 32px rgba(23, 29, 53, 0.18);
+  /* Only things that float above the workspace cast a shadow. */
+  --shadow-sm: 0 2px 8px rgba(4, 8, 18, 0.32);
+  --shadow-float: 0 16px 40px rgba(4, 8, 18, 0.5), 0 2px 6px rgba(4, 8, 18, 0.3);
 
-  --font-ui: "Nunito Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
-  --font-display: "Bricolage Grotesque", "Nunito Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-ui: "Manrope", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-display: "Space Grotesk", "Manrope", ui-sans-serif, system-ui, sans-serif;
   --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
 
   --text-xs: 11px;
@@ -101,24 +87,14 @@
   --text-base: 13px;
   --text-md: 14px;
   --text-lg: 16px;
-  --text-xl: 20px;
-  --text-2xl: 26px;
-  --text-3xl: 38px;
+  --text-xl: 19px;
+  --text-2xl: 22px;
+  --text-3xl: 34px;
 
   --ease: cubic-bezier(0.2, 0, 0.1, 1);
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
-  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
-  --duration: 160ms;
-  --duration-slow: 280ms;
-
-  /* Washi tape with torn ends. */
-  --tape-clip: polygon(
-    0 8%, 4% 0, 8% 10%, 12% 0, 88% 0, 92% 10%, 96% 0, 100% 8%,
-    100% 92%, 96% 100%, 92% 90%, 88% 100%, 12% 100%, 8% 90%, 4% 100%, 0 92%
-  );
-
-  /* Faint paper fibre, for the welcome spread. */
-  --paper-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.09 0 0 0 0 0.11 0 0 0 0 0.21 0 0 0 0.05 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  --duration: 140ms;
+  --duration-slow: 240ms;
 }
 
 @media (prefers-reduced-motion: reduce) {

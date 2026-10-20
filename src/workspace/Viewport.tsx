@@ -1,4 +1,4 @@
-import { useState, type CSSProperties, type RefObject } from "react";
+import { useState, type RefObject } from "react";
 import type { StageStats } from "../render/stage";
 import { FOV_RANGE } from "../render/stage";
 import { findLook } from "../looks/catalogue";
@@ -88,10 +88,8 @@ export function Viewport({ canvasRef, stats, loading, showStats, onToggleStats }
       </div>
 
       {look && (
-        <div className="viewport__look" aria-live="polite" style={{ "--look-accent": look.accent } as CSSProperties}>
-          <span className="viewport__look-gem" aria-hidden="true">
-            <Icon name="star" size={11} />
-          </span>
+        <div className="viewport__look" aria-live="polite">
+          <span className="viewport__look-pip" aria-hidden="true" />
           <span className="viewport__look-label">Look</span>
           <span className="viewport__look-name">{look.name}</span>
         </div>
