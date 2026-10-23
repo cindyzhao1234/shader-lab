@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { History } from "../core/history";
+import { parseProject, serialiseProject } from "../core/project";
 import { WorkspaceStore, type StageLike } from "./store";
 
 class FakeStage implements StageLike {
@@ -224,5 +225,92 @@ describe("WorkspaceStore", () => {
 
     vi.advanceTimersByTime(1000);
     expect(stage.captures).toBe(0);
+  });
+
+  describe("model import and project manifest integration", () => {
+    async function createFakeImportedModel(store: WorkspaceStore, name = "Lantern") {
+      const bytes = new Uint8Array([0x67, 0x6c, 0x54, 0x46, 1, 2, 3, 4]);
+      const primaryAsset = await store.assets.add(`${name.toLowerCase()}.glb`, "model/gltf-binary", bytes);
+      const group = new THREE.Group();
+      group.name = name;
+      group.position.set(1, 2, 3);
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshStandardMaterial());
+      mesh.name = "Glass";
+      group.add(mesh);
+      return {
+        root: group,
+        name,
+        primaryAsset,
+        companionAssets: [],
+        warnings: [],
+      };
+    }
+
+    it("imports a model undoably, selects it, frames the camera and updates project state", async () => {
+      const { store, stage, root } = setup();
+      const imported = await createFakeImportedModel(store, "Lantern");
+
+      const id = store.importModel(imported);
+
+      expect(store.getSnapshot().selectedId).toBe(id);
+      expect(store.getSnapshot().importedCount).toBe(1);
+      expect(store.getSnapshot().undoLabel).toBe("Import Lantern");
+      expect(stage.framed.at(-1)).toEqual({ target: imported.root, animate: true });
+      expect(root.children).toContain(imported.root);
+
+      // Child meshes are discoverable, selectable, hideable and focusable
+      const glass = imported.root.children[0]!;
+      store.select(glass.uuid);
+      store.focus();
+      expect(stage.framed.at(-1)).toEqual({ target: glass, animate: true });
+
+      store.setVisible(glass.uuid, false);
+      expect(glass.visible).toBe(false);
+
+      // Project manifest serialises and round-trips cleanly with the imported asset and visibility edit
+      const manifest = store.toProjectManifest(new Date("2026-10-23T00:00:00.000Z"));
+      const roundTripped = parseProject(serialiseProject(manifest));
+      expect(roundTripped.assets).toHaveLength(1);
+      expect(roundTripped.assets[0]!.hash).toBe(imported.primaryAsset.hash);
+      expect(roundTripped.entries).toContainEqual(
+        expect.objectContaining({
+          name: "Lantern",
+          source: { kind: "imported", assetHash: imported.primaryAsset.hash },
+          transform: expect.objectContaining({ position: [1, 2, 3] }),
+        }),
+      );
+      expect(roundTripped.edits["Lantern/Glass"]).toEqual({ visible: false });
+
+      // Undo visibility then undo import
+      store.undo();
+      expect(glass.visible).toBe(true);
+
+      store.undo();
+      expect(root.children).not.toContain(imported.root);
+      expect(store.getSnapshot().importedCount).toBe(0);
+
+      // Redo import
+      store.redo();
+      expect(root.children).toContain(imported.root);
+      expect(store.getSnapshot().importedCount).toBe(1);
+      expect(store.getSnapshot().selectedId).toBe(id);
+    });
+
+    it("removes an imported model undoably and refuses to remove built-in objects", async () => {
+      const { store, root, cube } = setup();
+      const imported = await createFakeImportedModel(store, "Crate");
+      const id = store.importModel(imported);
+
+      expect(store.removeImportedObject(cube.uuid)).toBe(false);
+      expect(store.removeImportedObject(id)).toBe(true);
+      expect(root.children).not.toContain(imported.root);
+      expect(store.getSnapshot().importedCount).toBe(0);
+      expect(store.getSnapshot().undoLabel).toBe("Remove Crate");
+
+      store.undo();
+      expect(root.children).toContain(imported.root);
+      expect(store.getSnapshot().importedCount).toBe(1);
+      expect(store.getSnapshot().selectedId).toBe(id);
+    });
   });
 });

@@ -22,6 +22,8 @@ export interface SceneRow {
   visible: boolean;
   /** False when this object or any ancestor is hidden. */
   shown: boolean;
+  /** True when this row is the top-level root of an imported model. */
+  importedRoot?: boolean;
 }
 
 export interface MaterialSummary {
@@ -42,8 +44,17 @@ export interface ObjectSummary {
   position: [number, number, number];
   triangles?: number;
   vertices?: number;
+  meshCount?: number;
   materials?: MaterialSummary[];
   light?: { colour: string; intensity: number; castsShadow: boolean };
+  /** True when this object is the top-level root of an imported model. */
+  importedRoot?: boolean;
+  /** Original filename for an imported root. */
+  sourceFileName?: string;
+}
+
+export function isImportedRoot(object: THREE.Object3D): boolean {
+  return typeof object.userData?.importedEntryId === "string";
 }
 
 export function displayName(object: THREE.Object3D): string {
@@ -58,6 +69,22 @@ export function displayName(object: THREE.Object3D): string {
   }
 
   return (object as THREE.Mesh).isMesh ? "Unnamed mesh" : "Unnamed group";
+}
+
+/**
+ * Stable slash-separated path from `root` to `target` (excluding `root`
+ * itself), used to key `ProjectManifest.edits` across re-imports.
+ */
+export function objectHierarchyPath(root: THREE.Object3D, target: THREE.Object3D): string {
+  const segments: string[] = [];
+  let cursor: THREE.Object3D | null = target;
+
+  while (cursor && cursor !== root) {
+    segments.unshift(displayName(cursor));
+    cursor = cursor.parent;
+  }
+
+  return segments.join("/");
 }
 
 /** Every user-facing object under `root`, depth first, excluding `root` itself. */
@@ -78,7 +105,7 @@ export function buildSceneRows(root: THREE.Object3D): SceneRow[] {
       }
 
       const shown = parentShown && child.visible;
-      rows.push({
+      const row: SceneRow = {
         id: child.uuid,
         name: displayName(child),
         kind,
@@ -86,7 +113,13 @@ export function buildSceneRows(root: THREE.Object3D): SceneRow[] {
         depth,
         visible: child.visible,
         shown,
-      });
+      };
+
+      if (isImportedRoot(child)) {
+        row.importedRoot = true;
+      }
+
+      rows.push(row);
       visit(child, depth + 1, shown);
     }
   };
@@ -106,6 +139,13 @@ export function summariseObject(object: THREE.Object3D): ObjectSummary {
     position: [object.position.x, object.position.y, object.position.z],
   };
 
+  if (isImportedRoot(object)) {
+    summary.importedRoot = true;
+    if (typeof object.userData?.sourceFileName === "string") {
+      summary.sourceFileName = object.userData.sourceFileName;
+    }
+  }
+
   const mesh = object as THREE.Mesh;
 
   if (mesh.isMesh) {
@@ -113,6 +153,34 @@ export function summariseObject(object: THREE.Object3D): ObjectSummary {
     summary.vertices = mesh.geometry.attributes.position?.count ?? 0;
     const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
     summary.materials = materials.map(summariseMaterial);
+  } else if (kind === "group") {
+    let totalTriangles = 0;
+    let totalVertices = 0;
+    let meshes = 0;
+    const materials: MaterialSummary[] = [];
+
+    object.traverse((child) => {
+      const childMesh = child as THREE.Mesh;
+      if (!childMesh.isMesh || !childMesh.geometry) return;
+      meshes += 1;
+      totalTriangles += triangleCount(childMesh.geometry);
+      totalVertices += childMesh.geometry.attributes.position?.count ?? 0;
+      if (materials.length === 0) {
+        const mats = Array.isArray(childMesh.material) ? childMesh.material : [childMesh.material];
+        for (const mat of mats) {
+          if (mat) materials.push(summariseMaterial(mat));
+        }
+      }
+    });
+
+    if (meshes > 0) {
+      summary.meshCount = meshes;
+      summary.triangles = totalTriangles;
+      summary.vertices = totalVertices;
+      if (materials.length > 0) {
+        summary.materials = materials;
+      }
+    }
   }
 
   if (isLight(object)) {
@@ -145,6 +213,10 @@ function typeLabel(object: THREE.Object3D): string {
     return LIGHT_LABELS[lightKind(object)];
   }
 
+  if (isImportedRoot(object)) {
+    return (object as THREE.Mesh).isMesh ? "Imported mesh" : "Imported model";
+  }
+
   return (object as THREE.Mesh).isMesh ? "Mesh" : "Group";
 }
 
@@ -158,7 +230,7 @@ function rowKind(object: THREE.Object3D): SceneRowKind | undefined {
   }
 
   // Bones, cameras and helpers are not things a beginner selects in a list.
-  if ((object as THREE.Group).isGroup || object.type === "Object3D") {
+  if ((object as THREE.Group).isGroup || object.type === "Object3D" || object.type === "Scene") {
     return "group";
   }
 

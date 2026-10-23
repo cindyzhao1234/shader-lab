@@ -81,6 +81,43 @@ describe("summariseObject", () => {
     expect(sun.typeLabel).toBe("Sun light");
     expect(sun.light).toMatchObject({ colour: "#fff1dd", intensity: 2.1, castsShadow: true });
   });
+
+  it("describes an imported multi-mesh group and aggregates its triangle and mesh counts", () => {
+    const imported = new THREE.Group();
+    imported.name = "Ancient Arch";
+    imported.userData = { importedEntryId: "imported-1", sourceFileName: "arch.glb" };
+
+    const pillarA = new THREE.Mesh(
+      new THREE.BoxGeometry(),
+      new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 0.6, metalness: 0.1 }),
+    );
+    pillarA.name = "Pillar Left";
+    const pillarB = new THREE.Mesh(
+      new THREE.BoxGeometry(),
+      new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 0.6, metalness: 0.1 }),
+    );
+    pillarB.name = "Pillar Right";
+    imported.add(pillarA, pillarB);
+
+    const root = new THREE.Group();
+    root.add(imported);
+
+    const rows = buildSceneRows(root);
+    expect(rows[0]).toMatchObject({
+      name: "Ancient Arch",
+      kind: "group",
+      depth: 0,
+      importedRoot: true,
+    });
+    expect(rows[1]).toMatchObject({ name: "Pillar Left", kind: "mesh", depth: 1 });
+
+    const summary = summariseObject(imported);
+    expect(summary.typeLabel).toBe("Imported model");
+    expect(summary.importedRoot).toBe(true);
+    expect(summary.sourceFileName).toBe("arch.glb");
+    expect(summary.meshCount).toBe(2);
+    expect(summary.triangles).toBe(24);
+  });
 });
 
 describe("triangleCount", () => {

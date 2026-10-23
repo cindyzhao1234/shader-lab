@@ -242,11 +242,15 @@ export class RenderStage {
     const centre = box.getCenter(new THREE.Vector3());
     const radius = Math.max(size.length() * 0.5, 0.05);
     const fov = THREE.MathUtils.degToRad(this.camera.fov);
+    const rawDistance = (radius / Math.sin(fov * 0.5)) * padding;
+    this.controls.maxDistance = Math.max(40, rawDistance * 4);
     const distance = THREE.MathUtils.clamp(
-      (radius / Math.sin(fov * 0.5)) * padding,
+      rawDistance,
       this.controls.minDistance,
       this.controls.maxDistance,
     );
+
+    this.fitDirectionalShadows();
 
     const direction = (options.direction?.clone() ?? this.camera.position.clone().sub(this.controls.target))
       .normalize();
@@ -286,6 +290,47 @@ export class RenderStage {
       duration: FOCUS_DURATION_MS,
     };
     this.requestRender();
+  }
+
+  /**
+   * Fits directional shadow frustums to the current visible scene bounds so
+   * imported models of any scale cast shadows without clipping.
+   */
+  fitDirectionalShadows(target: THREE.Object3D = this.scene): void {
+    const box = new THREE.Box3().setFromObject(target);
+    if (box.isEmpty()) {
+      return;
+    }
+
+    const centre = box.getCenter(new THREE.Vector3());
+    const size = box.getSize(new THREE.Vector3());
+    const extent = Math.max(size.x, size.y, size.z, 3) * 0.65;
+
+    this.scene.traverse((object) => {
+      const light = object as THREE.DirectionalLight;
+      if (!light.isDirectionalLight || !light.castShadow) {
+        return;
+      }
+
+      const dir = light.position.clone().sub(light.target.position).normalize();
+      if (dir.lengthSq() < 1e-6) {
+        dir.set(0.45, 1, 0.2).normalize();
+      }
+
+      const dist = Math.max(extent * 2.5, 8);
+      light.position.copy(centre).addScaledVector(dir, dist);
+      light.target.position.copy(centre);
+      light.target.updateMatrixWorld();
+
+      const cam = light.shadow.camera;
+      cam.left = -extent;
+      cam.right = extent;
+      cam.top = extent;
+      cam.bottom = -extent;
+      cam.near = Math.max(0.1, dist - extent * 2.2);
+      cam.far = dist + extent * 2.5;
+      cam.updateProjectionMatrix();
+    });
   }
 
   /**

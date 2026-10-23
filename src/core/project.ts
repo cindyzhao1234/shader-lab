@@ -38,7 +38,11 @@ export const sceneEntrySchema = z.object({
   id: z.string().min(1),
   name: z.string(),
   source: z.discriminatedUnion("kind", [
-    z.object({ kind: z.literal("imported"), assetHash: z.string() }),
+    z.object({
+      kind: z.literal("imported"),
+      assetHash: z.string(),
+      companionHashes: z.array(z.string()).optional(),
+    }),
     z.object({ kind: z.literal("primitive"), primitive: primitiveKindSchema }),
   ]),
   transform: transformSchema,

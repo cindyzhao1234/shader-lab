@@ -1,6 +1,17 @@
-import { useCallback, useEffect, useRef, useState, type CSSProperties, type RefObject } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type CSSProperties,
+  type DragEvent,
+  type RefObject,
+} from "react";
+import { readBrowserFiles } from "./render/gltfImport";
 import { RenderStage, type StageStats } from "./render/stage";
 import { createDemoScene } from "./scenes/demo";
+import { Icon } from "./ui/Icon";
 import { IS_MAC, WorkspaceProvider, useWorkspace, useWorkspaceStore } from "./workspace/context";
 import { useLayoutPreferences, useWindowWidth } from "./workspace/hooks";
 import { fitPanels, isDocked, layoutModeFor, type PanelSide } from "./workspace/layout";
@@ -84,6 +95,7 @@ export default function App() {
         stats={stats}
         firstFrame={firstFrame}
         notice={notice}
+        onShowNotice={setNotice}
         onDismissNotice={() => setNotice(null)}
       />
     </WorkspaceProvider>
@@ -95,10 +107,18 @@ interface WorkspaceProps {
   stats: StageStats | null;
   firstFrame: boolean;
   notice: string | null;
+  onShowNotice: (message: string | null) => void;
   onDismissNotice: () => void;
 }
 
-function Workspace({ canvasRef, stats, firstFrame, notice, onDismissNotice }: WorkspaceProps) {
+function Workspace({
+  canvasRef,
+  stats,
+  firstFrame,
+  notice,
+  onShowNotice,
+  onDismissNotice,
+}: WorkspaceProps) {
   const store = useWorkspaceStore();
   const { projectName } = useWorkspace();
   const windowWidth = useWindowWidth();
@@ -106,6 +126,9 @@ function Workspace({ canvasRef, stats, firstFrame, notice, onDismissNotice }: Wo
   const [drawer, setDrawer] = useState<PanelSide | null>(null);
   const [welcomeOpen, setWelcomeOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [draggingFiles, setDraggingFiles] = useState(false);
+  const dragDepthRef = useRef(0);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const mode = layoutModeFor(windowWidth);
   const leftDocked = isDocked("left", mode);
@@ -164,6 +187,73 @@ function Workspace({ canvasRef, stats, firstFrame, notice, onDismissNotice }: Wo
     [mode, updatePreferences],
   );
 
+  const handleFiles = useCallback(
+    async (files: FileList | File[]) => {
+      const list = Array.from(files);
+      if (list.length === 0) return;
+
+      try {
+        const inputs = await readBrowserFiles(list);
+        const result = await store.importFiles(inputs);
+        if (result.warnings.length > 0) {
+          onShowNotice(result.warnings.join(" "));
+        } else {
+          onShowNotice(null);
+        }
+      } catch (error) {
+        const message =
+          error instanceof Error && error.message
+            ? error.message
+            : "Could not import the selected 3D model.";
+        onShowNotice(message);
+      }
+    },
+    [store, onShowNotice],
+  );
+
+  const openFilePicker = useCallback(() => {
+    fileInputRef.current?.click();
+  }, []);
+
+  const onFileInputChange = (event: ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files && event.target.files.length > 0) {
+      void handleFiles(event.target.files);
+      event.target.value = "";
+    }
+  };
+
+  const onDragEnter = (event: DragEvent<HTMLElement>) => {
+    if (!event.dataTransfer.types.includes("Files")) return;
+    event.preventDefault();
+    dragDepthRef.current += 1;
+    setDraggingFiles(true);
+  };
+
+  const onDragOver = (event: DragEvent<HTMLElement>) => {
+    if (!event.dataTransfer.types.includes("Files")) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+  };
+
+  const onDragLeave = (event: DragEvent<HTMLElement>) => {
+    if (!event.dataTransfer.types.includes("Files")) return;
+    event.preventDefault();
+    dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+    if (dragDepthRef.current === 0) {
+      setDraggingFiles(false);
+    }
+  };
+
+  const onDrop = (event: DragEvent<HTMLElement>) => {
+    if (!event.dataTransfer.types.includes("Files")) return;
+    event.preventDefault();
+    dragDepthRef.current = 0;
+    setDraggingFiles(false);
+    if (event.dataTransfer.files && event.dataTransfer.files.length > 0) {
+      void handleFiles(event.dataTransfer.files);
+    }
+  };
+
   const closeWelcome = () => {
     setWelcomeOpen(false);
     updatePreferences({ welcomeSeen: true });
@@ -220,12 +310,29 @@ function Workspace({ canvasRef, stats, firstFrame, notice, onDismissNotice }: Wo
   } as CSSProperties;
 
   return (
-    <div className={`app app--${mode}`}>
+    <div
+      className={`app app--${mode}`}
+      onDragEnter={onDragEnter}
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
+    >
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".glb,.gltf,.bin,image/png,image/jpeg,image/webp"
+        multiple
+        hidden
+        aria-label="Import 3D model files"
+        onChange={onFileInputChange}
+      />
+
       <TopBar
         compact={mode === "compact"}
         condensed={mode !== "wide"}
         sceneOpen={leftShown}
         looksOpen={rightShown}
+        onImport={openFilePicker}
         onToggleScene={() => togglePanel("left")}
         onToggleLooks={() => togglePanel("right")}
         onSetWorkspaceView={setWorkspaceView}
@@ -245,7 +352,7 @@ function Workspace({ canvasRef, stats, firstFrame, notice, onDismissNotice }: Wo
       >
         {leftDocked && (
           <aside className="sidebar sidebar--left" aria-label="Scene" hidden={!preferences.leftOpen}>
-            <SceneSidebar />
+            <SceneSidebar onImport={openFilePicker} />
             <ResizeHandle
               side="left"
               width={widths.left}
@@ -282,9 +389,21 @@ function Workspace({ canvasRef, stats, firstFrame, notice, onDismissNotice }: Wo
               className={`sidebar drawer drawer--${drawer}`}
               aria-label={drawer === "left" ? "Scene" : "Look Studio"}
             >
-              {drawer === "left" ? <SceneSidebar /> : <LookStudio />}
+              {drawer === "left" ? <SceneSidebar onImport={openFilePicker} /> : <LookStudio />}
             </aside>
           </>
+        )}
+
+        {draggingFiles && (
+          <div className="drop-overlay" aria-live="polite">
+            <div className="drop-overlay__card">
+              <Icon name="import" size={22} />
+              <p className="drop-overlay__title">Drop 3D model to import</p>
+              <p className="drop-overlay__sub">
+                Supports <strong>.glb</strong> and <strong>.gltf</strong> (include companion <code>.bin</code> and texture files)
+              </p>
+            </div>
+          </div>
         )}
 
         {notice && (

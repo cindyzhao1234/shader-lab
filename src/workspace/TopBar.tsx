@@ -12,6 +12,7 @@ interface TopBarProps {
   condensed: boolean;
   sceneOpen: boolean;
   looksOpen: boolean;
+  onImport: () => void;
   onToggleScene: () => void;
   onToggleLooks: () => void;
   onSetWorkspaceView?: (view: "preview" | "studio") => void;
@@ -20,16 +21,18 @@ interface TopBarProps {
 }
 
 const SOON = {
-  import: "Bringing in your own GLB, glTF and OBJ models is coming soon.",
   save: "Saving projects is coming soon. Changes in this session are not kept after you close the tab.",
   export: "Exporting screenshots and Looks is coming soon.",
 };
+
+const IMPORT_TOOLTIP = "Import a .glb or .gltf 3D model (or drag files into the viewport)";
 
 export function TopBar({
   compact,
   condensed,
   sceneOpen,
   looksOpen,
+  onImport,
   onToggleScene,
   onToggleLooks,
   onSetWorkspaceView,
@@ -37,7 +40,7 @@ export function TopBar({
   onShowShortcuts,
 }: TopBarProps) {
   const store = useWorkspaceStore();
-  const { canUndo, canRedo, undoLabel, redoLabel } = useWorkspace();
+  const { canUndo, canRedo, undoLabel, redoLabel, importedCount, importing } = useWorkspace();
   const isPreviewOnly = !sceneOpen && !looksOpen;
 
   const selectPreview = () => {
@@ -70,7 +73,11 @@ export function TopBar({
 
         <div className="topbar__project">
           <ProjectName />
-          {!compact && <span className="topbar__chip">Demo</span>}
+          {!compact && (
+            <span className="topbar__chip">
+              {importedCount > 0 ? `${importedCount} imported` : "Demo"}
+            </span>
+          )}
         </div>
 
         <span className="topbar__divider" aria-hidden="true" />
@@ -120,19 +127,32 @@ export function TopBar({
         <div className="topbar__group topbar__group--project" role="group" aria-label="Project">
           {condensed ? (
             <>
-              <IconButton icon="import" size="sm" label="Import" unavailable={SOON.import} />
+              <IconButton
+                icon="import"
+                size="sm"
+                label={importing ? "Importing model…" : "Import model"}
+                aria-disabled={importing}
+                onClick={onImport}
+              />
               <IconButton icon="save" size="sm" label="Save" unavailable={SOON.save} />
               <IconButton icon="export" size="sm" label="Export" unavailable={SOON.export} />
             </>
           ) : (
             <>
-              <Button variant="ghost" size="sm" icon="import" unavailable={SOON.import}>
-                Import
+              <Button
+                variant="secondary"
+                size="sm"
+                icon="import"
+                tooltip={IMPORT_TOOLTIP}
+                aria-disabled={importing}
+                onClick={onImport}
+              >
+                {importing ? "Importing…" : "Import"}
               </Button>
               <Button variant="ghost" size="sm" icon="save" unavailable={SOON.save}>
                 Save
               </Button>
-              <Button variant="secondary" size="sm" icon="export" unavailable={SOON.export}>
+              <Button variant="ghost" size="sm" icon="export" unavailable={SOON.export}>
                 Export
               </Button>
             </>

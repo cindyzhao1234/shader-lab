@@ -1,8 +1,23 @@
 import type * as THREE from "three";
-import { History, valueCommand } from "../core/history";
+import { AssetStore, type StoredAsset } from "../core/assets";
+import { History, valueCommand, type Command } from "../core/history";
 import { PreviewCache } from "../core/previewCache";
+import {
+  createProject,
+  type AssetRef,
+  type EditLayer,
+  type PrimitiveKind,
+  type ProjectManifest,
+  type SceneEntry,
+  type Transform,
+} from "../core/project";
 import { DEFAULT_LOOK_ID, LOOKS, findLook } from "../looks/catalogue";
-import { displayName } from "./sceneModel";
+import {
+  importGltfFiles,
+  type ImportedModelResult,
+  type ImportFileInput,
+} from "../render/gltfImport";
+import { displayName, isImportedRoot, objectHierarchyPath } from "./sceneModel";
 
 /**
  * The workspace's single source of truth outside the scene graph itself.
@@ -38,6 +53,10 @@ export interface WorkspaceSnapshot {
   projectName: string;
   /** Moves forward on every visible scene edit. Panels rebuild their rows from it. */
   sceneRevision: number;
+  /** Number of user-imported models currently in the scene. */
+  importedCount: number;
+  /** True while a model file is being parsed and loaded. */
+  importing: boolean;
   selectedId: string | null;
   activeLookId: string;
   fov: number;
@@ -53,17 +72,38 @@ export interface WorkspaceOptions {
   /** Quiet time after the last change before thumbnails are re-rendered. */
   previewDelayMs?: number;
   history?: History;
+  assets?: AssetStore;
+}
+
+interface ImportedEntryRecord {
+  readonly entryId: string;
+  readonly object: THREE.Object3D;
+  readonly primaryAsset: StoredAsset;
+  readonly companionAssets: readonly StoredAsset[];
 }
 
 /** Twice the card's display width, so thumbnails stay sharp on high-density screens. */
 export const PREVIEW_WIDTH = 320;
 
+const DEMO_PRIMITIVE_BY_NAME: Record<string, PrimitiveKind> = {
+  Platform: "platform",
+  Cube: "cube",
+  Sphere: "sphere",
+  "Rock 1": "rock",
+  "Rock 2": "rock",
+  Pebble: "sphere",
+};
+
 export class WorkspaceStore {
   readonly history: History;
+  readonly assets: AssetStore;
   readonly previewCache = new PreviewCache<string>();
 
   private readonly listeners = new Set<() => void>();
   private readonly previewDelayMs: number;
+  private readonly createdAt = new Date().toISOString();
+  private readonly importedEntries = new Map<string, ImportedEntryRecord>();
+  private nextImportSeq = 1;
   private snapshot: WorkspaceSnapshot;
   private stage: StageLike | undefined;
   private content: THREE.Object3D | undefined;
@@ -73,11 +113,14 @@ export class WorkspaceStore {
 
   constructor(options: WorkspaceOptions = {}) {
     this.history = options.history ?? new History();
+    this.assets = options.assets ?? new AssetStore();
     this.previewDelayMs = options.previewDelayMs ?? 450;
     this.snapshot = {
       ready: false,
       projectName: options.projectName ?? "Untitled Project",
       sceneRevision: 0,
+      importedCount: 0,
+      importing: false,
       selectedId: null,
       activeLookId: DEFAULT_LOOK_ID,
       fov: 50,
@@ -110,7 +153,12 @@ export class WorkspaceStore {
       stage.onCameraSettled(() => this.invalidatePreviews()),
       this.history.subscribe(() => this.syncHistory()),
     ];
-    this.update({ ready: true, fov: stage.fov, sceneRevision: this.snapshot.sceneRevision + 1 });
+    this.update({
+      ready: true,
+      fov: stage.fov,
+      importedCount: this.importedEntries.size,
+      sceneRevision: this.snapshot.sceneRevision + 1,
+    });
     this.invalidatePreviews();
   }
 
@@ -128,10 +176,17 @@ export class WorkspaceStore {
     this.previewTimer = undefined;
     this.stage = undefined;
     this.content = undefined;
+    this.importedEntries.clear();
     this.history.clear();
     this.syncHistory();
     this.previewCache.clear();
-    this.update({ ready: false, selectedId: null, previews: this.buildPreviews() });
+    this.update({
+      ready: false,
+      importedCount: 0,
+      importing: false,
+      selectedId: null,
+      previews: this.buildPreviews(),
+    });
   }
 
   get contentRoot(): THREE.Object3D | undefined {
@@ -160,6 +215,228 @@ export class WorkspaceStore {
         write: (value) => this.update({ projectName: value }),
       }),
     );
+  }
+
+  /**
+   * Builds a serialisable `ProjectManifest` representing the current project
+   * state, including content-addressed imported assets, scene entries and
+   * visibility overrides.
+   */
+  toProjectManifest(at = new Date()): ProjectManifest {
+    const base = createProject(this.snapshot.projectName, at);
+    const assetMap = new Map<string, AssetRef>();
+    const entries: SceneEntry[] = [];
+    const edits: EditLayer = {};
+
+    if (this.content) {
+      let primitiveSeq = 1;
+      for (const child of this.content.children) {
+        const importedId = child.userData?.importedEntryId as string | undefined;
+        if (importedId && this.importedEntries.has(importedId)) {
+          const rec = this.importedEntries.get(importedId)!;
+          assetMap.set(rec.primaryAsset.hash, toAssetRef(rec.primaryAsset));
+          for (const comp of rec.companionAssets) {
+            assetMap.set(comp.hash, toAssetRef(comp));
+          }
+
+          entries.push({
+            id: rec.entryId,
+            name: displayName(child),
+            source: {
+              kind: "imported",
+              assetHash: rec.primaryAsset.hash,
+              ...(rec.companionAssets.length > 0
+                ? { companionHashes: rec.companionAssets.map((c) => c.hash) }
+                : {}),
+            },
+            transform: readTransform(child),
+          });
+        } else {
+          const primitive = DEMO_PRIMITIVE_BY_NAME[child.name];
+          if (primitive) {
+            entries.push({
+              id: `primitive-${primitiveSeq++}`,
+              name: displayName(child),
+              source: { kind: "primitive", primitive },
+              transform: readTransform(child),
+            });
+          }
+        }
+      }
+
+      const contentRoot = this.content;
+      contentRoot.traverse((obj) => {
+        if (obj === contentRoot) return;
+        if (!obj.visible) {
+          const path = objectHierarchyPath(contentRoot, obj);
+          if (path) {
+            edits[path] = { ...edits[path], visible: false };
+          }
+        }
+      });
+    }
+
+    return {
+      ...base,
+      createdAt: this.createdAt,
+      modifiedAt: at.toISOString(),
+      assets: [...assetMap.values()],
+      entries,
+      edits,
+      look: { lookId: this.snapshot.activeLookId, params: {} },
+      camera: {
+        ...base.camera,
+        fov: this.snapshot.fov,
+      },
+    };
+  }
+
+  // ---- model import & removal ----
+
+  /**
+   * Parses and imports `.glb` or `.gltf` files into the scene, storing raw
+   * bytes in `this.assets`, adding the root to the scene undoably, selecting
+   * it and framing the camera around it.
+   */
+  async importFiles(files: readonly ImportFileInput[]): Promise<ImportedModelResult> {
+    this.update({ importing: true });
+    try {
+      const result = await importGltfFiles(files, this.assets);
+      this.importModel(result);
+      return result;
+    } finally {
+      this.update({ importing: false });
+    }
+  }
+
+  /**
+   * Adds an already-parsed `ImportedModelResult` to the scene undoably,
+   * selects it and frames the camera around it. Returns the root object's UUID.
+   */
+  importModel(imported: ImportedModelResult): string {
+    const content = this.content;
+    if (!content) {
+      throw new Error("Cannot import a model before the workspace is attached to a scene.");
+    }
+
+    const entryId = `imported-${this.nextImportSeq++}`;
+    const root = imported.root;
+    root.name = this.uniqueChildName(imported.name);
+    root.userData = {
+      ...root.userData,
+      importedEntryId: entryId,
+      sourceFileName: imported.primaryAsset.name,
+      assetHash: imported.primaryAsset.hash,
+    };
+
+    const record: ImportedEntryRecord = {
+      entryId,
+      object: root,
+      primaryAsset: imported.primaryAsset,
+      companionAssets: imported.companionAssets,
+    };
+
+    const previousSelectedId = this.snapshot.selectedId;
+
+    const command: Command = {
+      label: `Import ${root.name}`,
+      apply: () => {
+        content.add(root);
+        this.importedEntries.set(entryId, record);
+        this.update({
+          selectedId: root.uuid,
+          importedCount: this.importedEntries.size,
+        });
+        this.sceneChanged();
+        this.stage?.frame(root, { animate: true, padding: 1.35 });
+      },
+      revert: () => {
+        content.remove(root);
+        this.importedEntries.delete(entryId);
+        const keepSelection =
+          previousSelectedId && this.getObject(previousSelectedId) ? previousSelectedId : null;
+        this.update({
+          selectedId: keepSelection,
+          importedCount: this.importedEntries.size,
+        });
+        this.sceneChanged();
+        this.stage?.frame(content, { animate: true, padding: 1.3 });
+      },
+    };
+
+    this.history.push(command);
+    return root.uuid;
+  }
+
+  /**
+   * Removes an imported model root from the scene undoably. Built-in demo
+   * objects and lights are not removed by this method.
+   */
+  removeImportedObject(id: string): boolean {
+    const content = this.content;
+    const object = this.getObject(id);
+    if (!content || !object || !isImportedRoot(object) || object.parent !== content) {
+      return false;
+    }
+
+    const entryId = object.userData.importedEntryId as string;
+    const record = this.importedEntries.get(entryId);
+    if (!record) {
+      return false;
+    }
+
+    const index = content.children.indexOf(object);
+    const previousSelectedId = this.snapshot.selectedId;
+
+    const command: Command = {
+      label: `Remove ${displayName(object)}`,
+      apply: () => {
+        content.remove(object);
+        this.importedEntries.delete(entryId);
+        const nextSelection =
+          previousSelectedId && this.getObject(previousSelectedId) ? previousSelectedId : null;
+        this.update({
+          selectedId: nextSelection,
+          importedCount: this.importedEntries.size,
+        });
+        this.sceneChanged();
+      },
+      revert: () => {
+        content.add(object);
+        const currentIdx = content.children.indexOf(object);
+        if (currentIdx !== -1 && index >= 0 && index < content.children.length - 1) {
+          content.children.splice(currentIdx, 1);
+          content.children.splice(index, 0, object);
+        }
+        this.importedEntries.set(entryId, record);
+        this.update({
+          selectedId: object.uuid,
+          importedCount: this.importedEntries.size,
+        });
+        this.sceneChanged();
+      },
+    };
+
+    this.history.push(command);
+    return true;
+  }
+
+  private uniqueChildName(desired: string): string {
+    const base = desired.trim() || "Imported Model";
+    if (!this.content) {
+      return base;
+    }
+
+    const existing = new Set(this.content.children.map((child) => child.name));
+    if (!existing.has(base)) {
+      return base;
+    }
+
+    let suffix = 2;
+    while (existing.has(`${base} ${suffix}`)) {
+      suffix += 1;
+    }
+    return `${base} ${suffix}`;
   }
 
   // ---- scene ----
@@ -353,4 +630,21 @@ export class WorkspaceStore {
       listener();
     }
   }
+}
+
+function toAssetRef(asset: StoredAsset): AssetRef {
+  return {
+    hash: asset.hash,
+    name: asset.name,
+    mime: asset.mime,
+    byteLength: asset.bytes.byteLength,
+  };
+}
+
+function readTransform(object: THREE.Object3D): Transform {
+  return {
+    position: [object.position.x, object.position.y, object.position.z],
+    rotation: [object.quaternion.x, object.quaternion.y, object.quaternion.z, object.quaternion.w],
+    scale: [object.scale.x, object.scale.y, object.scale.z],
+  };
 }

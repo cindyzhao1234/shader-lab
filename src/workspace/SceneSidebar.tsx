@@ -23,7 +23,11 @@ function rowIcon(row: SceneRow): IconName {
   return ROW_ICONS[row.kind === "light" ? (row.lightKind ?? "other") : row.kind] ?? "cube";
 }
 
-export function SceneSidebar() {
+interface SceneSidebarProps {
+  onImport?: () => void;
+}
+
+export function SceneSidebar({ onImport }: SceneSidebarProps = {}) {
   const store = useWorkspaceStore();
   const { sceneRevision, selectedId, ready } = useWorkspace();
   const [tab, setTab] = useState<SceneTab>("objects");
@@ -63,7 +67,18 @@ export function SceneSidebar() {
       <div className="sidebar__head">
         <div className="sidebar__head-row">
           <h2 className="sidebar__title">Scene</h2>
-          <span className="sidebar__meta">{rows.length} items</span>
+          <div className="sidebar__head-actions">
+            <span className="sidebar__meta">{rows.length} items</span>
+            {onImport && (
+              <IconButton
+                icon="import"
+                size="sm"
+                label="Import model (.glb, .gltf)"
+                tooltipSide="right"
+                onClick={onImport}
+              />
+            )}
+          </div>
         </div>
       </div>
 
@@ -115,6 +130,13 @@ export function SceneSidebar() {
         open={detailsOpen}
         onToggleOpen={() => setDetailsOpen((current) => !current)}
         onFocus={() => store.focus()}
+        onRemove={
+          selected?.importedRoot
+            ? () => {
+                store.removeImportedObject(selected.id);
+              }
+            : undefined
+        }
         onClear={() => store.select(null)}
       />
     </div>
@@ -143,6 +165,7 @@ function SceneRowItem({ row, selected, onSelect, onFocus, onToggleVisible }: Sce
       >
         <Icon name={rowIcon(row)} size={14} className="scene-row__icon" />
         <span className="scene-row__name">{row.name}</span>
+        {row.importedRoot && <span className="scene-row__badge">GLTF</span>}
       </button>
       <IconButton
         icon={row.visible ? "eye" : "eyeOff"}
@@ -161,10 +184,11 @@ interface SelectionDetailsProps {
   open: boolean;
   onToggleOpen: () => void;
   onFocus: () => void;
+  onRemove?: () => void;
   onClear: () => void;
 }
 
-function SelectionDetails({ summary, open, onToggleOpen, onFocus, onClear }: SelectionDetailsProps) {
+function SelectionDetails({ summary, open, onToggleOpen, onFocus, onRemove, onClear }: SelectionDetailsProps) {
   if (!summary) {
     return (
       <section className="details details--empty" aria-label="Selection details">
@@ -208,6 +232,12 @@ function SelectionDetails({ summary, open, onToggleOpen, onFocus, onClear }: Sel
       {open && (
         <>
           <dl className="facts">
+            {summary.sourceFileName && (
+              <Fact label="Source" value={summary.sourceFileName} />
+            )}
+            {summary.meshCount !== undefined && summary.meshCount > 1 && (
+              <Fact label="Meshes" value={summary.meshCount.toLocaleString()} />
+            )}
             {summary.triangles !== undefined && (
               <Fact label="Triangles" value={summary.triangles.toLocaleString()} />
             )}
@@ -258,10 +288,17 @@ function SelectionDetails({ summary, open, onToggleOpen, onFocus, onClear }: Sel
           </dl>
 
           <div className="details__footer">
-            <Button size="sm" icon="focus" onClick={onFocus} tooltip="Fly the camera to this" shortcut={shortcutKeys("focus", IS_MAC)}>
-              Focus
-            </Button>
-            <span className="details__note">Read-only in Stage 1</span>
+            <div className="details__actions">
+              <Button size="sm" icon="focus" onClick={onFocus} tooltip="Fly the camera to this" shortcut={shortcutKeys("focus", IS_MAC)}>
+                Focus
+              </Button>
+              {onRemove && (
+                <Button size="sm" variant="ghost" icon="trash" onClick={onRemove} tooltip="Remove imported model from scene">
+                  Remove
+                </Button>
+              )}
+            </div>
+            {!onRemove && <span className="details__note">Read-only in Stage 2</span>}
           </div>
         </>
       )}
