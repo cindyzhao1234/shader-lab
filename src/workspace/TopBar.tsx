@@ -14,6 +14,7 @@ interface TopBarProps {
   looksOpen: boolean;
   onToggleScene: () => void;
   onToggleLooks: () => void;
+  onSetWorkspaceView?: (view: "preview" | "studio") => void;
   onShowWelcome: () => void;
   onShowShortcuts: () => void;
 }
@@ -31,91 +32,139 @@ export function TopBar({
   looksOpen,
   onToggleScene,
   onToggleLooks,
+  onSetWorkspaceView,
   onShowWelcome,
   onShowShortcuts,
 }: TopBarProps) {
   const store = useWorkspaceStore();
   const { canUndo, canRedo, undoLabel, redoLabel } = useWorkspace();
+  const isPreviewOnly = !sceneOpen && !looksOpen;
+
+  const selectPreview = () => {
+    if (onSetWorkspaceView) {
+      onSetWorkspaceView("preview");
+      return;
+    }
+    if (sceneOpen) onToggleScene();
+    if (looksOpen) onToggleLooks();
+  };
+
+  const selectStudio = () => {
+    if (onSetWorkspaceView) {
+      onSetWorkspaceView("studio");
+      return;
+    }
+    if (!sceneOpen) onToggleScene();
+    if (!looksOpen) onToggleLooks();
+  };
 
   return (
     <header className="topbar">
-      <div className="topbar__brand">
-        <LogoMark />
-        {!compact && <Wordmark />}
+      <div className="topbar__cluster topbar__cluster--left">
+        <div className="topbar__brand">
+          <LogoMark size={22} />
+          {!compact && <Wordmark />}
+        </div>
+
+        <span className="topbar__divider" aria-hidden="true" />
+
+        <div className="topbar__project">
+          <ProjectName />
+          {!compact && <span className="topbar__chip">Demo</span>}
+        </div>
+
+        <span className="topbar__divider" aria-hidden="true" />
+
+        <div className="topbar__group" role="group" aria-label="History">
+          <IconButton
+            icon="undo"
+            size="sm"
+            label={canUndo ? `Undo ${lowerFirst(undoLabel)}`.trim() : "Nothing to undo"}
+            shortcut={shortcutKeys("undo", IS_MAC)}
+            aria-disabled={!canUndo}
+            className={canUndo ? undefined : "is-inert"}
+            onClick={() => store.undo()}
+          />
+          <IconButton
+            icon="redo"
+            size="sm"
+            label={canRedo ? `Redo ${lowerFirst(redoLabel)}`.trim() : "Nothing to redo"}
+            shortcut={shortcutKeys("redo", IS_MAC)}
+            aria-disabled={!canRedo}
+            className={canRedo ? undefined : "is-inert"}
+            onClick={() => store.redo()}
+          />
+        </div>
       </div>
 
-      <span className="topbar__divider" aria-hidden="true" />
-
-      <div className="topbar__project">
-        <ProjectName />
-        {!compact && <span className="topbar__chip">Demo scene</span>}
+      <div className="topbar__switcher" role="group" aria-label="Workspace view">
+        <button
+          type="button"
+          className={isPreviewOnly ? "topbar__mode is-active" : "topbar__mode"}
+          aria-pressed={isPreviewOnly}
+          onClick={selectPreview}
+        >
+          Preview
+        </button>
+        <button
+          type="button"
+          className={!isPreviewOnly ? "topbar__mode is-active" : "topbar__mode"}
+          aria-pressed={!isPreviewOnly}
+          onClick={selectStudio}
+        >
+          Studio
+        </button>
       </div>
 
-      <span className="topbar__spacer" />
+      <div className="topbar__cluster topbar__cluster--right">
+        <div className="topbar__group topbar__group--project" role="group" aria-label="Project">
+          {condensed ? (
+            <>
+              <IconButton icon="import" size="sm" label="Import" unavailable={SOON.import} />
+              <IconButton icon="save" size="sm" label="Save" unavailable={SOON.save} />
+              <IconButton icon="export" size="sm" label="Export" unavailable={SOON.export} />
+            </>
+          ) : (
+            <>
+              <Button variant="ghost" size="sm" icon="import" unavailable={SOON.import}>
+                Import
+              </Button>
+              <Button variant="ghost" size="sm" icon="save" unavailable={SOON.save}>
+                Save
+              </Button>
+              <Button variant="secondary" size="sm" icon="export" unavailable={SOON.export}>
+                Export
+              </Button>
+            </>
+          )}
+        </div>
 
-      <div className="topbar__group" role="group" aria-label="History">
-        <IconButton
-          icon="undo"
-          label={canUndo ? `Undo ${lowerFirst(undoLabel)}`.trim() : "Nothing to undo"}
-          shortcut={shortcutKeys("undo", IS_MAC)}
-          aria-disabled={!canUndo}
-          className={canUndo ? undefined : "is-inert"}
-          onClick={() => store.undo()}
-        />
-        <IconButton
-          icon="redo"
-          label={canRedo ? `Redo ${lowerFirst(redoLabel)}`.trim() : "Nothing to redo"}
-          shortcut={shortcutKeys("redo", IS_MAC)}
-          aria-disabled={!canRedo}
-          className={canRedo ? undefined : "is-inert"}
-          onClick={() => store.redo()}
-        />
-      </div>
-
-      <div className="topbar__group topbar__group--project" role="group" aria-label="Project">
-        {condensed ? (
-          <>
-            <IconButton icon="import" label="Import" unavailable={SOON.import} />
-            <IconButton icon="save" label="Save" unavailable={SOON.save} />
-            <IconButton icon="export" label="Export" unavailable={SOON.export} />
-          </>
-        ) : (
-          <>
-            <Button variant="ghost" icon="import" unavailable={SOON.import}>
-              Import
-            </Button>
-            <Button variant="ghost" icon="save" unavailable={SOON.save}>
-              Save
-            </Button>
-            <Button variant="secondary" icon="export" unavailable={SOON.export}>
-              Export
-            </Button>
-          </>
-        )}
-      </div>
-
-      <div className="topbar__group" role="group" aria-label="Workspace">
-        <IconButton
-          icon="panelLeft"
-          label={sceneOpen ? "Hide scene panel" : "Show scene panel"}
-          shortcut={shortcutKeys("toggleScene", IS_MAC)}
-          pressed={sceneOpen}
-          onClick={onToggleScene}
-        />
-        <IconButton
-          icon="panelRight"
-          label={looksOpen ? "Hide Look Studio" : "Show Look Studio"}
-          shortcut={shortcutKeys("toggleLooks", IS_MAC)}
-          pressed={looksOpen}
-          onClick={onToggleLooks}
-        />
-        <IconButton
-          icon="keyboard"
-          label="Keyboard shortcuts"
-          shortcut={shortcutKeys("shortcuts", IS_MAC)}
-          onClick={onShowShortcuts}
-        />
-        <IconButton icon="help" label="Welcome guide" onClick={onShowWelcome} />
+        <div className="topbar__group" role="group" aria-label="Workspace">
+          <IconButton
+            icon="panelLeft"
+            size="sm"
+            label={sceneOpen ? "Hide scene panel" : "Show scene panel"}
+            shortcut={shortcutKeys("toggleScene", IS_MAC)}
+            pressed={sceneOpen}
+            onClick={onToggleScene}
+          />
+          <IconButton
+            icon="panelRight"
+            size="sm"
+            label={looksOpen ? "Hide Look Studio" : "Show Look Studio"}
+            shortcut={shortcutKeys("toggleLooks", IS_MAC)}
+            pressed={looksOpen}
+            onClick={onToggleLooks}
+          />
+          <IconButton
+            icon="keyboard"
+            size="sm"
+            label="Keyboard shortcuts"
+            shortcut={shortcutKeys("shortcuts", IS_MAC)}
+            onClick={onShowShortcuts}
+          />
+          <IconButton icon="help" size="sm" label="Welcome guide" onClick={onShowWelcome} />
+        </div>
       </div>
     </header>
   );
@@ -182,7 +231,7 @@ function ProjectName() {
         }}
       >
         <span className="project-name__text">{projectName}</span>
-        <Icon name="pencil" size={13} className="project-name__pencil" />
+        <Icon name="pencil" size={12} className="project-name__pencil" />
       </button>
     </Tooltip>
   );

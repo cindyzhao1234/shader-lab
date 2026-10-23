@@ -6,11 +6,13 @@ import { IconButton } from "../ui/Button";
 import { Icon } from "../ui/Icon";
 import { Popover } from "../ui/Popover";
 import { Slider } from "../ui/Slider";
+import { Tooltip } from "../ui/Tooltip";
 import { IS_MAC, useWorkspace, useWorkspaceStore } from "./context";
 import { shortcutKeys } from "./shortcuts";
 
 /**
- * The 3D view and the few controls that float over it.
+ * The full-screen 3D view and the compact floating controls anchored at its
+ * bottom edge.
  *
  * Overlays are siblings of the canvas, not children, and OrbitControls only
  * listens on the canvas — so clicking a toolbar button can never start an
@@ -44,59 +46,70 @@ export function Viewport({ canvasRef, stats, loading, showStats, onToggleStats }
         onWheel={() => setInteracted(true)}
       />
 
-      <div className="viewport__toolbar" role="toolbar" aria-label="View">
-        <IconButton
-          icon="focus"
-          label="Focus selection"
-          shortcut={shortcutKeys("focus", IS_MAC)}
-          onClick={() => store.focus()}
-        />
-        <IconButton
-          icon="reset"
-          label="Return to starting view"
-          shortcut={shortcutKeys("resetView", IS_MAC)}
-          onClick={() => store.resetView()}
-        />
-        <span className="viewport__toolbar-divider" aria-hidden="true" />
-        <Popover
-          open={cameraOpen}
-          onOpenChange={setCameraOpen}
-          label="Camera"
-          trigger={(props) => (
-            <IconButton icon="camera" label="Camera" pressed={cameraOpen} {...props} />
-          )}
-        >
-          <Slider
-            label="Field of view"
-            value={Math.round(fov)}
-            min={FOV_RANGE.min}
-            max={FOV_RANGE.max}
-            step={1}
-            unit="°"
-            defaultValue={DEFAULT_FOV}
-            hint="Wide angles exaggerate depth. Narrow ones flatten it, like a long lens."
-            onChange={(value) => store.setFov(value)}
-            onCommit={() => store.endGesture()}
+      <div className="viewport__bottom">
+        <div className="viewport__toolbar" role="toolbar" aria-label="View">
+          <Tooltip content="Focus selection" shortcut={shortcutKeys("focus", IS_MAC)}>
+            <button
+              type="button"
+              className="viewport__fit-btn"
+              aria-label="Focus selection"
+              onClick={() => store.focus()}
+            >
+              <Icon name="focus" size={14} />
+              <span>Fit View</span>
+              <kbd aria-hidden="true">F</kbd>
+            </button>
+          </Tooltip>
+          <span className="viewport__toolbar-divider" aria-hidden="true" />
+          <IconButton
+            icon="reset"
+            size="sm"
+            label="Return to starting view"
+            shortcut={shortcutKeys("resetView", IS_MAC)}
+            onClick={() => store.resetView()}
           />
-        </Popover>
-        <IconButton
-          icon="gauge"
-          label={showStats ? "Hide performance" : "Show performance"}
-          pressed={showStats}
-          onClick={onToggleStats}
-        />
+          <Popover
+            open={cameraOpen}
+            onOpenChange={setCameraOpen}
+            label="Camera"
+            align="end"
+            trigger={(props) => (
+              <IconButton icon="camera" size="sm" label="Camera" pressed={cameraOpen} {...props} />
+            )}
+          >
+            <Slider
+              label="Field of view"
+              value={Math.round(fov)}
+              min={FOV_RANGE.min}
+              max={FOV_RANGE.max}
+              step={1}
+              unit="°"
+              defaultValue={DEFAULT_FOV}
+              hint="Wide angles exaggerate depth. Narrow ones flatten it, like a long lens."
+              onChange={(value) => store.setFov(value)}
+              onCommit={() => store.endGesture()}
+            />
+          </Popover>
+          <IconButton
+            icon="gauge"
+            size="sm"
+            label={showStats ? "Hide performance" : "Show performance"}
+            pressed={showStats}
+            onClick={onToggleStats}
+          />
+        </div>
+
+        {look && (
+          <div className="viewport__look" aria-live="polite">
+            <span className="viewport__look-pip" aria-hidden="true" />
+            <span className="viewport__look-label">Look</span>
+            <span className="viewport__look-name">{look.name}</span>
+          </div>
+        )}
       </div>
 
-      {look && (
-        <div className="viewport__look" aria-live="polite">
-          <span className="viewport__look-pip" aria-hidden="true" />
-          <span className="viewport__look-label">Look</span>
-          <span className="viewport__look-name">{look.name}</span>
-        </div>
-      )}
-
       <p className={interacted ? "viewport__hint is-hidden" : "viewport__hint"} aria-hidden="true">
-        <Icon name="orbit" size={14} />
+        <Icon name="orbit" size={13} />
         <span className="viewport__hint-mouse">Drag to orbit · Scroll to zoom · Right-drag to pan</span>
         <span className="viewport__hint-touch">Drag to orbit · Pinch to zoom · Two-finger drag to pan</span>
       </p>
@@ -107,7 +120,7 @@ export function Viewport({ canvasRef, stats, loading, showStats, onToggleStats }
             <strong>{Number.isFinite(stats.frameMs) ? stats.frameMs.toFixed(1) : "–"}</strong> ms
           </span>
           <span>
-            <strong>{stats.triangles.toLocaleString()}</strong> triangles
+            <strong>{stats.triangles.toLocaleString()}</strong> tris
           </span>
           <span>
             <strong>{stats.drawCalls}</strong> draws

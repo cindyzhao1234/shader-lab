@@ -27,6 +27,7 @@ export function SceneSidebar() {
   const store = useWorkspaceStore();
   const { sceneRevision, selectedId, ready } = useWorkspace();
   const [tab, setTab] = useState<SceneTab>("objects");
+  const [detailsOpen, setDetailsOpen] = useState(true);
 
   // sceneRevision is the signal that the graph changed; the root itself is stable.
   const rows = useMemo(() => {
@@ -60,8 +61,10 @@ export function SceneSidebar() {
   return (
     <div className="sidebar__inner">
       <div className="sidebar__head">
-        <h2 className="sidebar__title">Scene</h2>
-        <p className="sidebar__subtitle">Everything in your scene, and what it&rsquo;s made of.</p>
+        <div className="sidebar__head-row">
+          <h2 className="sidebar__title">Scene</h2>
+          <span className="sidebar__meta">{rows.length} items</span>
+        </div>
       </div>
 
       <div className="sidebar__tabs">
@@ -107,7 +110,13 @@ export function SceneSidebar() {
         )}
       </div>
 
-      <SelectionDetails summary={selected} onFocus={() => store.focus()} onClear={() => store.select(null)} />
+      <SelectionDetails
+        summary={selected}
+        open={detailsOpen}
+        onToggleOpen={() => setDetailsOpen((current) => !current)}
+        onFocus={() => store.focus()}
+        onClear={() => store.select(null)}
+      />
     </div>
   );
 }
@@ -132,7 +141,7 @@ function SceneRowItem({ row, selected, onSelect, onFocus, onToggleVisible }: Sce
         onClick={onSelect}
         onDoubleClick={onFocus}
       >
-        <Icon name={rowIcon(row)} size={16} className="scene-row__icon" />
+        <Icon name={rowIcon(row)} size={14} className="scene-row__icon" />
         <span className="scene-row__name">{row.name}</span>
       </button>
       <IconButton
@@ -149,19 +158,21 @@ function SceneRowItem({ row, selected, onSelect, onFocus, onToggleVisible }: Sce
 
 interface SelectionDetailsProps {
   summary: ObjectSummary | undefined;
+  open: boolean;
+  onToggleOpen: () => void;
   onFocus: () => void;
   onClear: () => void;
 }
 
-function SelectionDetails({ summary, onFocus, onClear }: SelectionDetailsProps) {
+function SelectionDetails({ summary, open, onToggleOpen, onFocus, onClear }: SelectionDetailsProps) {
   if (!summary) {
     return (
       <section className="details details--empty" aria-label="Selection details">
         <span className="details__empty-icon">
-          <Icon name="info" size={18} />
+          <Icon name="info" size={14} />
         </span>
         <p>
-          Select something to see what it&rsquo;s made of. <span className="muted">Double-click to fly the camera to it.</span>
+          Select an object or light to inspect its material. <span className="muted">Double-click to frame.</span>
         </p>
       </section>
     );
@@ -172,72 +183,88 @@ function SelectionDetails({ summary, onFocus, onClear }: SelectionDetailsProps) 
   return (
     <section className="details" aria-label={`Details for ${summary.name}`}>
       <header className="details__header">
-        <div className="details__heading">
-          <h3 className="details__name">{summary.name}</h3>
-          <span className="details__type">
-            {summary.typeLabel}
-            {!summary.visible && <span className="pill pill--muted">Hidden</span>}
-          </span>
-        </div>
+        <button
+          type="button"
+          className="details__collapse"
+          aria-expanded={open}
+          onClick={onToggleOpen}
+        >
+          <Icon
+            name="chevronRight"
+            size={13}
+            className={open ? "panel__chevron is-open" : "panel__chevron"}
+          />
+          <div className="details__heading">
+            <h3 className="details__name">{summary.name}</h3>
+            <span className="details__type">
+              {summary.typeLabel}
+              {!summary.visible && <span className="pill pill--muted">Hidden</span>}
+            </span>
+          </div>
+        </button>
         <IconButton icon="close" label="Clear selection" size="sm" onClick={onClear} />
       </header>
 
-      <dl className="facts">
-        {summary.triangles !== undefined && (
-          <Fact label="Triangles" value={summary.triangles.toLocaleString()} />
-        )}
-        {material && (
-          <>
-            <Fact label="Material" value={material.type} />
-            {material.colour && (
-              <Fact
-                label="Colour"
-                value={
-                  <span className="swatch-value">
-                    <span className="swatch" style={{ background: material.colour }} />
-                    {material.colour.toUpperCase()}
-                  </span>
-                }
-              />
+      {open && (
+        <>
+          <dl className="facts">
+            {summary.triangles !== undefined && (
+              <Fact label="Triangles" value={summary.triangles.toLocaleString()} />
             )}
-            {material.roughness !== undefined && <Meter label="Roughness" value={material.roughness} />}
-            {material.metalness !== undefined && <Meter label="Metalness" value={material.metalness} />}
-            {(material.hasColourTexture || material.hasNormalMap) && (
-              <Fact
-                label="Textures"
-                value={
-                  <span className="chip-row">
-                    {material.hasColourTexture && <span className="pill">Colour</span>}
-                    {material.hasNormalMap && <span className="pill">Normal map</span>}
-                  </span>
-                }
-              />
+            {material && (
+              <>
+                <Fact label="Material" value={material.type} />
+                {material.colour && (
+                  <Fact
+                    label="Diffuse"
+                    value={
+                      <span className="swatch-value">
+                        <span className="swatch" style={{ background: material.colour }} />
+                        <span className="swatch-hex">{material.colour.toUpperCase()}</span>
+                      </span>
+                    }
+                  />
+                )}
+                {material.roughness !== undefined && <Meter label="Roughness" value={material.roughness} />}
+                {material.metalness !== undefined && <Meter label="Metalness" value={material.metalness} />}
+                {(material.hasColourTexture || material.hasNormalMap) && (
+                  <Fact
+                    label="Textures"
+                    value={
+                      <span className="chip-row">
+                        {material.hasColourTexture && <span className="pill">Colour</span>}
+                        {material.hasNormalMap && <span className="pill">Normal map</span>}
+                      </span>
+                    }
+                  />
+                )}
+              </>
             )}
-          </>
-        )}
-        {summary.light && (
-          <>
-            <Fact
-              label="Colour"
-              value={
-                <span className="swatch-value">
-                  <span className="swatch" style={{ background: summary.light.colour }} />
-                  {summary.light.colour.toUpperCase()}
-                </span>
-              }
-            />
-            <Fact label="Brightness" value={summary.light.intensity.toFixed(1)} />
-            <Fact label="Shadows" value={summary.light.castsShadow ? "On" : "Off"} />
-          </>
-        )}
-      </dl>
+            {summary.light && (
+              <>
+                <Fact
+                  label="Colour"
+                  value={
+                    <span className="swatch-value">
+                      <span className="swatch" style={{ background: summary.light.colour }} />
+                      <span className="swatch-hex">{summary.light.colour.toUpperCase()}</span>
+                    </span>
+                  }
+                />
+                <Fact label="Brightness" value={summary.light.intensity.toFixed(1)} />
+                <Fact label="Shadows" value={summary.light.castsShadow ? "On" : "Off"} />
+              </>
+            )}
+          </dl>
 
-      <div className="details__footer">
-        <Button size="sm" icon="focus" onClick={onFocus} tooltip="Fly the camera to this" shortcut={shortcutKeys("focus", IS_MAC)}>
-          Focus
-        </Button>
-        <span className="details__note">Editing arrives soon</span>
-      </div>
+          <div className="details__footer">
+            <Button size="sm" icon="focus" onClick={onFocus} tooltip="Fly the camera to this" shortcut={shortcutKeys("focus", IS_MAC)}>
+              Focus
+            </Button>
+            <span className="details__note">Read-only in Stage 1</span>
+          </div>
+        </>
+      )}
     </section>
   );
 }
@@ -260,7 +287,7 @@ function Meter({ label, value }: { label: string; value: number }) {
         <span className="meter" aria-hidden="true">
           <span className="meter__fill" style={{ width: `${Math.round(value * 100)}%` }} />
         </span>
-        {value.toFixed(2)}
+        <span className="meter-number">{value.toFixed(2)}</span>
       </dd>
     </div>
   );

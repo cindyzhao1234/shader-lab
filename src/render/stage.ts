@@ -133,7 +133,7 @@ export class RenderStage {
     // This is lighter than the intended backdrop because it passes through
     // ACES tone mapping on the way out, which pulls dark values down.
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color("#283149");
+    this.scene.background = new THREE.Color("#1f2125");
 
     this.camera = new THREE.PerspectiveCamera(50, 1, 0.1, 500);
     this.camera.position.set(4.2, 2.6, 5.2);

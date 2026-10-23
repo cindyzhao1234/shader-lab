@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { LOOKS, ORIGINAL_TECHNIQUES, findLook } from "../looks/catalogue";
 import { Icon } from "../ui/Icon";
 import { useWorkspace, useWorkspaceStore } from "./context";
@@ -7,14 +8,17 @@ export function LookStudio() {
   const store = useWorkspaceStore();
   const { activeLookId, previews } = useWorkspace();
   const active = findLook(activeLookId);
+  const [inspectorOpen, setInspectorOpen] = useState(true);
 
   return (
     <div className="sidebar__inner">
       <div className="sidebar__head studio-head">
-        <p className="eyebrow">Look Studio</p>
-        <h2 className="studio-head__title">Choose a Look</h2>
+        <div className="sidebar__head-row">
+          <h2 className="sidebar__title">Look Studio</h2>
+          {active && <span className="sidebar__badge">{active.name}</span>}
+        </div>
         <p className="sidebar__subtitle">
-          A Look changes how your scene is drawn. Your models and materials always stay as they are.
+          Non-destructive style presets. Models and materials stay untouched.
         </p>
       </div>
 
@@ -23,31 +27,48 @@ export function LookStudio() {
 
         {active && (
           <section className="look-details" aria-labelledby="look-details-name">
-            <p className="eyebrow">Applied</p>
-            <h3 id="look-details-name" className="look-details__name">
-              {active.name}
-            </h3>
-            <p className="look-details__description">{active.description}</p>
+            <button
+              type="button"
+              className="look-details__toggle"
+              aria-expanded={inspectorOpen}
+              onClick={() => setInspectorOpen((current) => !current)}
+            >
+              <span className="eyebrow">Active Look · {active.name}</span>
+              <Icon
+                name="chevronRight"
+                size={13}
+                className={inspectorOpen ? "panel__chevron is-open" : "panel__chevron"}
+              />
+            </button>
 
-            {active.id === "original" && (
-              <>
-                <h4 className="subhead">In this Look</h4>
-                <ul className="chip-list">
-                  {ORIGINAL_TECHNIQUES.map((technique) => (
-                    <li key={technique} className="pill">
-                      {technique}
-                    </li>
-                  ))}
-                </ul>
-              </>
-            )}
+            {inspectorOpen && (
+              <div className="look-details__body">
+                <h3 id="look-details-name" className="visually-hidden">
+                  {active.name}
+                </h3>
+                <p className="look-details__description">{active.description}</p>
 
-            {active.controls.length === 0 && (
-              <div className="look-details__note">
-                <Icon name="info" size={16} />
-                <p>
-                  Original has nothing to adjust. When stylised Looks arrive, their controls will appear here.
-                </p>
+                {active.id === "original" && (
+                  <>
+                    <h4 className="subhead">Pipeline</h4>
+                    <ul className="chip-list">
+                      {ORIGINAL_TECHNIQUES.map((technique) => (
+                        <li key={technique} className="pill">
+                          {technique}
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+
+                {active.controls.length === 0 && (
+                  <div className="look-details__note">
+                    <Icon name="sparkles" size={14} />
+                    <p>
+                      Original has no style parameters. Stylised Look sliders appear here once unlocked.
+                    </p>
+                  </div>
+                )}
               </div>
             )}
           </section>

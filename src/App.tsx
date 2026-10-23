@@ -14,8 +14,8 @@ import { TopBar } from "./workspace/TopBar";
 import { Viewport } from "./workspace/Viewport";
 import { WelcomeDialog } from "./workspace/WelcomeDialog";
 
-/** Outer padding, the two gutters between panels and viewport, and the viewport's frame. Matches app.css. */
-const CHROME_WIDTH = 8 * 2 + 8 * 2 + 1 * 2;
+/** Outer floating margins and gaps between floating panels and viewport. Matches app.css. */
+const CHROME_WIDTH = 12 * 2 + 12 * 2;
 
 export default function App() {
   const [store] = useState(() => new WorkspaceStore({ projectName: "My First Look" }));
@@ -148,6 +148,22 @@ function Workspace({ canvasRef, stats, firstFrame, notice, onDismissNotice }: Wo
     [mode, preferences.leftOpen, preferences.rightOpen, updatePreferences],
   );
 
+  const setWorkspaceView = useCallback(
+    (view: "preview" | "studio") => {
+      if (mode === "compact") {
+        setDrawer(view === "studio" ? "right" : null);
+        return;
+      }
+      if (mode === "medium") {
+        setDrawer(null);
+        updatePreferences({ rightOpen: view === "studio" });
+        return;
+      }
+      updatePreferences({ leftOpen: view === "studio", rightOpen: view === "studio" });
+    },
+    [mode, updatePreferences],
+  );
+
   const closeWelcome = () => {
     setWelcomeOpen(false);
     updatePreferences({ welcomeSeen: true });
@@ -212,6 +228,7 @@ function Workspace({ canvasRef, stats, firstFrame, notice, onDismissNotice }: Wo
         looksOpen={rightShown}
         onToggleScene={() => togglePanel("left")}
         onToggleLooks={() => togglePanel("right")}
+        onSetWorkspaceView={setWorkspaceView}
         onShowWelcome={() => setWelcomeOpen(true)}
         onShowShortcuts={() => setShortcutsOpen(true)}
       />
