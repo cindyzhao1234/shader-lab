@@ -68,10 +68,12 @@ export const objectOverrideSchema = z.object({
  */
 export const editLayerSchema = z.record(z.string(), objectOverrideSchema);
 
-export const lookStateSchema = z.object({
-  lookId: z.string(),
-  params: z.record(z.string(), z.union([z.number(), z.string(), z.boolean()])),
-});
+export const lookStateSchema = z
+  .object({
+    lookId: z.string().min(1).default("original"),
+    params: z.record(z.string(), z.union([z.number(), z.string(), z.boolean()])).default({}),
+  })
+  .default({ lookId: "original", params: {} });
 
 export const cameraStateSchema = z.object({
   position: vec3,

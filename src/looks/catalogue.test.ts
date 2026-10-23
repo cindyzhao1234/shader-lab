@@ -1,10 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_LOOK_ID, LOOKS, findLook } from "./catalogue";
+import {
+  DEFAULT_LOOK_ID,
+  EXPERIMENTAL_LOOK_ID,
+  LOOKS,
+  findLook,
+} from "./catalogue";
 
 describe("Look catalogue", () => {
-  it("lists the seven built-in Looks with Original first", () => {
+  it("lists Original first, the experimental Stage 3 Look, and the six planned artistic presets", () => {
     expect(LOOKS.map((look) => look.id)).toEqual([
       "original",
+      EXPERIMENTAL_LOOK_ID,
       "cartoon",
       "dreamy",
       "retro",
@@ -19,11 +25,15 @@ describe("Look catalogue", () => {
     expect(new Set(LOOKS.map((look) => look.id)).size).toBe(LOOKS.length);
   });
 
-  it("only offers Looks whose rendering pipeline exists", () => {
-    // Raise this list as each Look's techniques land. A Look marked available
-    // without a pipeline would be a gallery card that does nothing.
+  it("only marks Original and the experimental Stage 3 proof-of-concept Look as available, keeping all six artistic presets planned", () => {
     const available = LOOKS.filter((look) => look.availability === "available");
-    expect(available.map((look) => look.id)).toEqual(["original"]);
+    expect(available.map((look) => look.id)).toEqual(["original", EXPERIMENTAL_LOOK_ID]);
+
+    const exp = findLook(EXPERIMENTAL_LOOK_ID)!;
+    expect(exp.experimental).toBe(true);
+
+    const plannedIds = LOOKS.filter((look) => look.availability === "planned").map((look) => look.id);
+    expect(plannedIds).toEqual(["cartoon", "dreamy", "retro", "painterly", "cinematic", "flat"]);
   });
 
   it("gives every Look a name, tagline and description", () => {

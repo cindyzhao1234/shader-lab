@@ -4,6 +4,8 @@ import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+import type { LookParams } from "../looks/schema";
+import { LookEngine } from "./lookEngine";
 
 /**
  * The rendering stage: renderer, scene, camera, controls and the post chain
@@ -81,6 +83,7 @@ export class RenderStage {
   readonly controls: OrbitControls;
   readonly composer: EffectComposer;
   readonly capabilities: StageCapabilities;
+  readonly lookEngine: LookEngine;
 
   private readonly renderPass: RenderPass;
   private readonly outputPass: OutputPass;
@@ -161,6 +164,11 @@ export class RenderStage {
     this.outputPass = new OutputPass();
     this.composer.addPass(this.renderPass);
     this.composer.addPass(this.outputPass);
+
+    this.lookEngine = new LookEngine({
+      scene: this.scene,
+      composer: this.composer,
+    });
 
     this.resizeObserver = new ResizeObserver(() => this.resize());
     this.resizeObserver.observe(canvas);
@@ -334,6 +342,64 @@ export class RenderStage {
   }
 
   /**
+   * Applies a Look and its parameters through the modular Look Engine.
+   */
+  applyLook(
+    lookId: string,
+    params?: Readonly<LookParams>,
+    contentRoot: THREE.Object3D = this.scene,
+  ): void {
+    this.lookEngine.applyLook(lookId, params, contentRoot);
+    this.requestRender();
+  }
+
+  /**
+   * Updates the active Look's parameters in-place without rebuilding scene materials.
+   */
+  updateLookParams(
+    params: Readonly<LookParams>,
+    contentRoot: THREE.Object3D = this.scene,
+  ): void {
+    this.lookEngine.updateParams(params, contentRoot);
+    this.requestRender();
+  }
+
+  /**
+   * Synchronises the active Look with newly imported or removed scene objects.
+   */
+  syncLookScene(contentRoot: THREE.Object3D = this.scene): void {
+    this.lookEngine.syncScene(contentRoot);
+    this.requestRender();
+  }
+
+  /**
+   * Renders a preview thumbnail for a specific Look and parameter set, then
+   * restores the active Look so the main viewport is left undisturbed.
+   */
+  captureLookPreview(
+    lookId: string,
+    params: Readonly<LookParams>,
+    width: number,
+    contentRoot: THREE.Object3D = this.scene,
+    aspect = 16 / 10,
+  ): string {
+    const previousId = this.lookEngine.currentLookId;
+    const previousParams = { ...this.lookEngine.currentParams };
+
+    if (lookId === previousId) {
+      return this.captureFrame(width, aspect);
+    }
+
+    try {
+      this.lookEngine.applyLook(lookId, params, contentRoot);
+      return this.captureFrame(width, aspect);
+    } finally {
+      this.lookEngine.applyLook(previousId, previousParams, contentRoot);
+      this.requestRender();
+    }
+  }
+
+  /**
    * Renders a fresh frame and copies the centre of it into a small image.
    * The copy must happen in the same task as the render: the canvas does not
    * preserve its drawing buffer, so by the next task the pixels may be gone.
@@ -389,6 +455,7 @@ export class RenderStage {
     cancelAnimationFrame(this.frameHandle);
     this.resizeObserver.disconnect();
     this.controls.dispose();
+    this.lookEngine.dispose();
     this.composer.dispose();
     this.environment.dispose();
     this.pmrem.dispose();

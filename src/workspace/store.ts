@@ -6,12 +6,21 @@ import {
   createProject,
   type AssetRef,
   type EditLayer,
+  type LookState,
   type PrimitiveKind,
   type ProjectManifest,
   type SceneEntry,
   type Transform,
 } from "../core/project";
 import { DEFAULT_LOOK_ID, LOOKS, findLook } from "../looks/catalogue";
+import { DEFAULT_LOOK_REGISTRY, type LookRegistry } from "../looks/registry";
+import {
+  areLookParamsEqual,
+  isDefaultLookParams,
+  sanitiseParamValue,
+  type LookParams,
+  type LookParamValue,
+} from "../looks/schema";
 import {
   importGltfFiles,
   type ImportedModelResult,
@@ -39,6 +48,22 @@ export interface StageLike {
   setFov(degrees: number): void;
   captureFrame(width: number, aspect?: number): string;
   onCameraSettled(listener: () => void): () => void;
+  applyLook?(
+    lookId: string,
+    params?: Readonly<LookParams>,
+    contentRoot?: THREE.Object3D,
+  ): void;
+  updateLookParams?(
+    params: Readonly<LookParams>,
+    contentRoot?: THREE.Object3D,
+  ): void;
+  syncLookScene?(contentRoot?: THREE.Object3D): void;
+  captureLookPreview?(
+    lookId: string,
+    params: Readonly<LookParams>,
+    width: number,
+    contentRoot?: THREE.Object3D,
+  ): string;
 }
 
 export interface PreviewState {
@@ -59,6 +84,10 @@ export interface WorkspaceSnapshot {
   importing: boolean;
   selectedId: string | null;
   activeLookId: string;
+  /** Validated parameters for the currently active Look. */
+  lookParams: Readonly<LookParams>;
+  /** True when the active Look has parameters that differ from their defaults. */
+  canResetLookParams: boolean;
   fov: number;
   canUndo: boolean;
   canRedo: boolean;
@@ -73,6 +102,7 @@ export interface WorkspaceOptions {
   previewDelayMs?: number;
   history?: History;
   assets?: AssetStore;
+  lookRegistry?: LookRegistry;
 }
 
 interface ImportedEntryRecord {
@@ -97,12 +127,14 @@ const DEMO_PRIMITIVE_BY_NAME: Record<string, PrimitiveKind> = {
 export class WorkspaceStore {
   readonly history: History;
   readonly assets: AssetStore;
+  readonly lookRegistry: LookRegistry;
   readonly previewCache = new PreviewCache<string>();
 
   private readonly listeners = new Set<() => void>();
   private readonly previewDelayMs: number;
   private readonly createdAt = new Date().toISOString();
   private readonly importedEntries = new Map<string, ImportedEntryRecord>();
+  private readonly lookParamsById = new Map<string, LookParams>();
   private nextImportSeq = 1;
   private snapshot: WorkspaceSnapshot;
   private stage: StageLike | undefined;
@@ -114,7 +146,15 @@ export class WorkspaceStore {
   constructor(options: WorkspaceOptions = {}) {
     this.history = options.history ?? new History();
     this.assets = options.assets ?? new AssetStore();
+    this.lookRegistry = options.lookRegistry ?? DEFAULT_LOOK_REGISTRY;
     this.previewDelayMs = options.previewDelayMs ?? 450;
+
+    for (const def of this.lookRegistry.list()) {
+      this.lookParamsById.set(def.id, this.lookRegistry.defaultParams(def.id));
+    }
+
+    const initialParams = this.getParamsForLook(DEFAULT_LOOK_ID);
+
     this.snapshot = {
       ready: false,
       projectName: options.projectName ?? "Untitled Project",
@@ -123,6 +163,8 @@ export class WorkspaceStore {
       importing: false,
       selectedId: null,
       activeLookId: DEFAULT_LOOK_ID,
+      lookParams: initialParams,
+      canResetLookParams: false,
       fov: 50,
       canUndo: false,
       canRedo: false,
@@ -153,6 +195,11 @@ export class WorkspaceStore {
       stage.onCameraSettled(() => this.invalidatePreviews()),
       this.history.subscribe(() => this.syncHistory()),
     ];
+    stage.applyLook?.(
+      this.snapshot.activeLookId,
+      this.snapshot.lookParams,
+      content,
+    );
     this.update({
       ready: true,
       fov: stage.fov,
@@ -180,11 +227,17 @@ export class WorkspaceStore {
     this.history.clear();
     this.syncHistory();
     this.previewCache.clear();
+    for (const def of this.lookRegistry.list()) {
+      this.lookParamsById.set(def.id, this.lookRegistry.defaultParams(def.id));
+    }
     this.update({
       ready: false,
       importedCount: 0,
       importing: false,
       selectedId: null,
+      activeLookId: DEFAULT_LOOK_ID,
+      lookParams: this.getParamsForLook(DEFAULT_LOOK_ID),
+      canResetLookParams: false,
       previews: this.buildPreviews(),
     });
   }
@@ -219,8 +272,8 @@ export class WorkspaceStore {
 
   /**
    * Builds a serialisable `ProjectManifest` representing the current project
-   * state, including content-addressed imported assets, scene entries and
-   * visibility overrides.
+   * state, including content-addressed imported assets, scene entries,
+   * visibility overrides and validated Look state.
    */
   toProjectManifest(at = new Date()): ProjectManifest {
     const base = createProject(this.snapshot.projectName, at);
@@ -276,6 +329,12 @@ export class WorkspaceStore {
       });
     }
 
+    const activeLookId = this.lookRegistry.resolveId(this.snapshot.activeLookId);
+    const validatedParams = this.lookRegistry.validateParams(
+      activeLookId,
+      this.snapshot.lookParams,
+    );
+
     return {
       ...base,
       createdAt: this.createdAt,
@@ -283,12 +342,29 @@ export class WorkspaceStore {
       assets: [...assetMap.values()],
       entries,
       edits,
-      look: { lookId: this.snapshot.activeLookId, params: {} },
+      look: {
+        lookId: activeLookId,
+        params: validatedParams,
+      },
       camera: {
         ...base.camera,
         fov: this.snapshot.fov,
       },
     };
+  }
+
+  /**
+   * Restores Look state from a parsed or legacy project manifest, validating
+   * and clamping parameters against the Look's schema and falling back to
+   * `original` when the Look is unknown or absent.
+   */
+  loadManifestLookState(lookState: Partial<LookState> | undefined | null): void {
+    const resolvedId = this.lookRegistry.resolveId(lookState?.lookId);
+    const validatedParams = this.lookRegistry.validateParams(
+      resolvedId,
+      lookState?.params,
+    );
+    this.writeLookState(resolvedId, validatedParams);
   }
 
   // ---- model import & removal ----
@@ -530,24 +606,165 @@ export class WorkspaceStore {
     this.history.redo();
   }
 
-  // ---- Looks ----
+  // ---- Looks & Parameters ----
 
   /**
-   * Applies a Look. Returns false, and changes nothing, for a Look whose
-   * rendering pipeline does not exist yet.
+   * Applies a Look undoably. Returns false, and changes nothing, for a Look
+   * whose rendering pipeline does not exist yet.
    */
   applyLook(id: string): boolean {
     const look = findLook(id);
 
-    if (!look || look.availability !== "available") {
+    if (!look || look.availability !== "available" || !this.lookRegistry.has(id)) {
       return false;
     }
 
-    if (id !== this.snapshot.activeLookId) {
-      this.update({ activeLookId: id });
+    const beforeId = this.snapshot.activeLookId;
+    if (id === beforeId) {
+      return true;
     }
 
+    const beforeParams = { ...this.snapshot.lookParams };
+    const afterParams = { ...this.getParamsForLook(id) };
+
+    this.history.push(
+      valueCommand({
+        label: `Apply ${look.name} Look`,
+        before: { lookId: beforeId, params: beforeParams },
+        after: { lookId: id, params: afterParams },
+        write: (state) => {
+          this.writeLookState(state.lookId, state.params);
+        },
+      }),
+    );
+
     return true;
+  }
+
+  /**
+   * Updates a single parameter on the active Look in-place. Continuous slider
+   * drags coalesce into a single undo entry per parameter key.
+   */
+  setLookParam(key: string, rawValue: LookParamValue): boolean {
+    const lookId = this.snapshot.activeLookId;
+    const def = this.lookRegistry.get(lookId);
+    if (!def) {
+      return false;
+    }
+
+    const descriptor = def.paramSchema.find((item) => item.key === key);
+    if (!descriptor) {
+      return false;
+    }
+
+    const nextValue = sanitiseParamValue(descriptor, rawValue);
+    const beforeParams = { ...this.snapshot.lookParams };
+    const currentValue = beforeParams[key] ?? descriptor.default;
+
+    if (
+      descriptor.kind === "number" &&
+      typeof currentValue === "number" &&
+      typeof nextValue === "number" &&
+      Math.abs(currentValue - nextValue) < 1e-6
+    ) {
+      return false;
+    }
+    if (currentValue === nextValue) {
+      return false;
+    }
+
+    const afterParams: LookParams = { ...beforeParams, [key]: nextValue };
+
+    this.history.push(
+      valueCommand({
+        label: `Adjust ${descriptor.label}`,
+        mergeKey: `look.param.${lookId}.${key}`,
+        before: beforeParams,
+        after: afterParams,
+        write: (params) => {
+          this.writeLookParamsInPlace(lookId, params);
+        },
+      }),
+    );
+
+    return true;
+  }
+
+  /**
+   * Resets all parameters of the active Look to their schema defaults in a
+   * single undoable step.
+   */
+  resetLookParams(): boolean {
+    const lookId = this.snapshot.activeLookId;
+    const def = this.lookRegistry.get(lookId);
+    if (!def || def.paramSchema.length === 0) {
+      return false;
+    }
+
+    const beforeParams = { ...this.snapshot.lookParams };
+    const defaults = this.lookRegistry.defaultParams(lookId);
+
+    if (areLookParamsEqual(def.paramSchema, beforeParams, defaults)) {
+      return false;
+    }
+
+    this.history.push(
+      valueCommand({
+        label: `Reset ${def.name} Look`,
+        before: beforeParams,
+        after: defaults,
+        write: (params) => {
+          this.writeLookParamsInPlace(lookId, params);
+        },
+      }),
+    );
+
+    return true;
+  }
+
+  private getParamsForLook(lookId: string): LookParams {
+    const existing = this.lookParamsById.get(lookId);
+    if (existing) {
+      return { ...existing };
+    }
+    const defaults = this.lookRegistry.defaultParams(lookId);
+    this.lookParamsById.set(lookId, defaults);
+    return { ...defaults };
+  }
+
+  private writeLookState(lookId: string, params: Readonly<LookParams>): void {
+    const def = this.lookRegistry.get(lookId);
+    const validated = this.lookRegistry.validateParams(lookId, params);
+    this.lookParamsById.set(lookId, validated);
+
+    this.stage?.applyLook?.(lookId, validated, this.content);
+    this.stage?.requestRender();
+
+    const canReset = def ? !isDefaultLookParams(def.paramSchema, validated) : false;
+    this.update({
+      activeLookId: lookId,
+      lookParams: validated,
+      canResetLookParams: canReset,
+    });
+    this.invalidatePreviews();
+  }
+
+  private writeLookParamsInPlace(lookId: string, params: Readonly<LookParams>): void {
+    const def = this.lookRegistry.get(lookId);
+    const validated = this.lookRegistry.validateParams(lookId, params);
+    this.lookParamsById.set(lookId, validated);
+
+    if (lookId === this.snapshot.activeLookId) {
+      this.stage?.updateLookParams?.(validated, this.content);
+      this.stage?.requestRender();
+
+      const canReset = def ? !isDefaultLookParams(def.paramSchema, validated) : false;
+      this.update({
+        lookParams: validated,
+        canResetLookParams: canReset,
+      });
+    }
+    this.invalidatePreviews();
   }
 
   // ---- previews ----
@@ -575,13 +792,16 @@ export class WorkspaceStore {
         continue;
       }
 
-      // Original is what the stage already renders. Stylised Looks will apply
-      // themselves to an offscreen pass here once the Look System exists.
-      if (look.id !== DEFAULT_LOOK_ID) {
-        continue;
+      let src = "";
+      if (stage.captureLookPreview) {
+        const params =
+          look.id === this.snapshot.activeLookId
+            ? this.snapshot.lookParams
+            : this.getParamsForLook(look.id);
+        src = stage.captureLookPreview(look.id, params, PREVIEW_WIDTH, this.content);
+      } else if (look.id === DEFAULT_LOOK_ID) {
+        src = stage.captureFrame(PREVIEW_WIDTH);
       }
-
-      const src = stage.captureFrame(PREVIEW_WIDTH);
 
       if (src) {
         this.previewCache.set(look.id, revision, src);
@@ -608,6 +828,9 @@ export class WorkspaceStore {
   // ---- internals ----
 
   private sceneChanged(): void {
+    if (this.content) {
+      this.stage?.syncLookScene?.(this.content);
+    }
     this.stage?.requestRender();
     this.update({ sceneRevision: this.snapshot.sceneRevision + 1 });
     this.invalidatePreviews();
@@ -645,6 +868,6 @@ function readTransform(object: THREE.Object3D): Transform {
   return {
     position: [object.position.x, object.position.y, object.position.z],
     rotation: [object.quaternion.x, object.quaternion.y, object.quaternion.z, object.quaternion.w],
-    scale: [object.scale.x, object.scale.y, object.scale.z],
+    scale: [object.scale.x, object.quaternion.y === undefined ? 1 : object.scale.y, object.scale.z],
   };
 }

@@ -74,6 +74,14 @@ describe("round-trip", () => {
     expect(parsed.look.params["palette"]).toBe("gameboy");
     expect(parsed.look.params["bloom"]).toBe(true);
   });
+
+  it("provides sensible defaults when an older manifest omits Look settings", () => {
+    const legacy = JSON.parse(serialiseProject(populated()));
+    delete legacy.look;
+
+    const parsed = parseProject(JSON.stringify(legacy));
+    expect(parsed.look).toEqual({ lookId: "original", params: {} });
+  });
 });
 
 describe("validation", () => {

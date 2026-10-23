@@ -163,6 +163,79 @@ describe("WorkspaceStore", () => {
     expect(store.applyLook("original")).toBe(true);
   });
 
+  describe("Modular Look switching, parameters and undo/redo", () => {
+    it("switches to the experimental Look undoably, coalesces slider drags, and resets parameters", () => {
+      const { store, advance } = setup();
+
+      expect(store.applyLook("stage3-test-look")).toBe(true);
+      expect(store.getSnapshot().activeLookId).toBe("stage3-test-look");
+      expect(store.getSnapshot().lookParams.toneBands).toBe(4);
+      expect(store.getSnapshot().canResetLookParams).toBe(false);
+      expect(store.getSnapshot().undoLabel).toBe("Apply Pipeline Test Look");
+
+      // Dragging a parameter slider coalesces into one undo entry
+      for (const bands of [5, 6, 7, 8]) {
+        expect(store.setLookParam("toneBands", bands)).toBe(true);
+        advance(16);
+      }
+      store.endGesture();
+
+      expect(store.getSnapshot().lookParams.toneBands).toBe(8);
+      expect(store.getSnapshot().canResetLookParams).toBe(true);
+      expect(store.history.entries).toHaveLength(2);
+      expect(store.getSnapshot().undoLabel).toBe("Adjust Shading Bands");
+
+      // Reset parameters to default in one undoable command
+      expect(store.resetLookParams()).toBe(true);
+      expect(store.getSnapshot().lookParams.toneBands).toBe(4);
+      expect(store.getSnapshot().canResetLookParams).toBe(false);
+      expect(store.getSnapshot().undoLabel).toBe("Reset Pipeline Test Look");
+
+      // Undo reset -> back to 8
+      store.undo();
+      expect(store.getSnapshot().lookParams.toneBands).toBe(8);
+      expect(store.getSnapshot().canResetLookParams).toBe(true);
+
+      // Undo slider drag -> back to default 4
+      store.undo();
+      expect(store.getSnapshot().lookParams.toneBands).toBe(4);
+
+      // Undo Look switch -> back to Original
+      store.undo();
+      expect(store.getSnapshot().activeLookId).toBe("original");
+
+      // Redo Look switch
+      store.redo();
+      expect(store.getSnapshot().activeLookId).toBe("stage3-test-look");
+    });
+
+    it("serialises validated Look parameters in the manifest and restores legacy manifests safely", () => {
+      const { store } = setup();
+      store.applyLook("stage3-test-look");
+      store.setLookParam("toneBands", 9);
+      store.setLookParam("contrast", 1.35);
+
+      const manifest = store.toProjectManifest(new Date("2026-10-23T00:00:00.000Z"));
+      const parsed = parseProject(serialiseProject(manifest));
+      expect(parsed.look.lookId).toBe("stage3-test-look");
+      expect(parsed.look.params.toneBands).toBe(9);
+      expect(parsed.look.params.contrast).toBe(1.35);
+
+      // Restore with out-of-range/unknown values clamps and sanitises
+      store.loadManifestLookState({
+        lookId: "stage3-test-look",
+        params: { toneBands: 999, bogus: "ignored" as any },
+      });
+      expect(store.getSnapshot().lookParams.toneBands).toBe(12);
+      expect("bogus" in store.getSnapshot().lookParams).toBe(false);
+
+      // Restore from an older or unknown Look falls back to Original
+      store.loadManifestLookState(undefined);
+      expect(store.getSnapshot().activeLookId).toBe("original");
+      expect(store.getSnapshot().lookParams).toEqual({});
+    });
+  });
+
   describe("previews", () => {
     it("renders the Original thumbnail once things go quiet", () => {
       const { store, stage } = setup();

@@ -74,7 +74,7 @@ function AvailableLookCard({ look, active, preview, onApply }: AvailableLookCard
       type="button"
       className={active ? "look-card is-active" : "look-card"}
       aria-pressed={active}
-      aria-label={`${look.name}. ${look.tagline}.${active ? " Applied." : ""}`}
+      aria-label={`${look.name}${look.experimental ? " (Experimental)" : ""}. ${look.tagline}.${active ? " Applied." : ""}`}
       onClick={onApply}
     >
       <span className="look-card__preview">
@@ -94,9 +94,17 @@ function AvailableLookCard({ look, active, preview, onApply }: AvailableLookCard
             Applied
           </span>
         )}
+        {look.experimental && (
+          <span className="look-card__exp" aria-hidden="true">
+            PoC
+          </span>
+        )}
       </span>
       <span className="look-card__text">
-        <span className="look-card__name">{look.name}</span>
+        <span className="look-card__name-row">
+          <span className="look-card__name">{look.name}</span>
+          {look.experimental && <span className="look-card__tag">Experimental</span>}
+        </span>
         <span className="look-card__tagline">{look.tagline}</span>
       </span>
     </button>
