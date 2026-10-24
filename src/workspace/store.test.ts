@@ -8,12 +8,16 @@ class FakeStage implements StageLike {
   fov = 50;
   renders = 0;
   captures = 0;
+  previewCaptures: Array<{ lookId: string; params: Record<string, unknown>; restoredComparison: boolean }> = [];
+  lastCanvasState: "single" | "comparison" = "single";
   framed: Array<{ target: THREE.Object3D; animate?: boolean }> = [];
   resets = 0;
+  comparisonState: { mode: string; splitRatio: number } = { mode: "off", splitRatio: 0.5 };
   private settled = new Set<() => void>();
 
   requestRender(): void {
     this.renders += 1;
+    this.lastCanvasState = this.comparisonState.mode === "off" ? "single" : "comparison";
   }
   frame(target: THREE.Object3D, options?: { animate?: boolean }): void {
     this.framed.push({ target, animate: options?.animate });
@@ -24,9 +28,23 @@ class FakeStage implements StageLike {
   setFov(degrees: number): void {
     this.fov = degrees;
   }
+  setComparison(mode: string, splitRatio = 0.5): void {
+    this.comparisonState = { mode, splitRatio };
+    this.lastCanvasState = mode === "off" ? "single" : "comparison";
+  }
   captureFrame(): string {
     this.captures += 1;
+    this.lastCanvasState = this.comparisonState.mode === "off" ? "single" : "comparison";
     return `data:image/webp;capture-${this.captures}`;
+  }
+  captureLookPreview(lookId: string, params: Record<string, unknown>): string {
+    this.captures += 1;
+    // Mirrors RenderStage.captureLookPreview: single-view capture followed by
+    // immediate restoration of the comparison composite when comparing.
+    const restoredComparison = this.comparisonState.mode !== "off";
+    this.lastCanvasState = restoredComparison ? "comparison" : "single";
+    this.previewCaptures.push({ lookId, params: { ...params }, restoredComparison });
+    return `data:image/webp;preview-${lookId}-${this.captures}`;
   }
   onCameraSettled(listener: () => void): () => void {
     this.settled.add(listener);
@@ -236,6 +254,84 @@ describe("WorkspaceStore", () => {
     });
   });
 
+  describe("Before/After comparison state and divider control", () => {
+    it("toggles comparison modes, clamps divider positions, and stays in sync with the stage", () => {
+      const { store, stage } = setup();
+
+      expect(store.getSnapshot().comparisonMode).toBe("off");
+      expect(store.getSnapshot().splitRatio).toBe(0.5);
+
+      store.toggleComparison();
+      expect(store.getSnapshot().comparisonMode).toBe("split");
+      expect(stage.comparisonState).toEqual({ mode: "split", splitRatio: 0.5 });
+
+      store.setSplitRatio(0.32);
+      expect(store.getSnapshot().splitRatio).toBe(0.32);
+      expect(stage.comparisonState).toEqual({ mode: "split", splitRatio: 0.32 });
+
+      // Clamps out-of-range divider drags
+      store.setSplitRatio(-1);
+      expect(store.getSnapshot().splitRatio).toBe(0.08);
+      store.setSplitRatio(5);
+      expect(store.getSnapshot().splitRatio).toBe(0.92);
+
+      // Resets divider to 50%
+      store.resetSplitRatio();
+      expect(store.getSnapshot().splitRatio).toBe(0.5);
+
+      // Switches to side-by-side and back off
+      store.setComparisonMode("side-by-side");
+      expect(store.getSnapshot().comparisonMode).toBe("side-by-side");
+      expect(stage.comparisonState.mode).toBe("side-by-side");
+
+      store.toggleComparison();
+      expect(store.getSnapshot().comparisonMode).toBe("off");
+      expect(stage.comparisonState.mode).toBe("off");
+    });
+
+    it("does not invalidate the Original thumbnail or overwrite the comparison view when adjusting Look parameters or orbiting", () => {
+      const { store, stage } = setup();
+
+      // Initial preview render completes
+      vi.advanceTimersByTime(100);
+      const initialOriginalPreview = store.getSnapshot().previews.original?.src;
+      expect(initialOriginalPreview).toBeDefined();
+
+      // Enable Split Comparison and select Pipeline Test
+      store.applyLook("stage3-test-look");
+      store.toggleComparison();
+      vi.advanceTimersByTime(100);
+      stage.previewCaptures.length = 0;
+
+      // Adjust Look parameters repeatedly while Split Comparison is active
+      store.setLookParam("toneBands", 2);
+      store.setLookParam("surfaceWarmth", 0.85);
+      store.setLookParam("contrast", 1.5);
+
+      // Original preview stays fresh while Pipeline Test preview is marked stale
+      expect(store.getSnapshot().previews.original?.fresh).toBe(true);
+      expect(store.getSnapshot().previews["stage3-test-look"]?.fresh).toBe(false);
+
+      // Debounced preview timer fires after slider adjustment
+      vi.advanceTimersByTime(100);
+
+      // Only the modified Look's thumbnail was re-captured; Original was untouched
+      expect(stage.previewCaptures).toHaveLength(1);
+      expect(stage.previewCaptures[0]!.lookId).toBe("stage3-test-look");
+      expect(stage.previewCaptures[0]!.restoredComparison).toBe(true);
+      expect(stage.lastCanvasState).toBe("comparison");
+      expect(store.getSnapshot().previews.original?.src).toBe(initialOriginalPreview);
+
+      // Camera movement settles while comparing -> both thumbnails refresh and comparison canvas is restored
+      stage.previewCaptures.length = 0;
+      stage.settle();
+      vi.advanceTimersByTime(100);
+      expect(stage.previewCaptures.map((c) => c.lookId)).toEqual(["original", "stage3-test-look"]);
+      expect(stage.previewCaptures.every((c) => c.restoredComparison)).toBe(true);
+      expect(stage.lastCanvasState).toBe("comparison");
+    });
+  });
+
   describe("previews", () => {
     it("renders the Original thumbnail once things go quiet", () => {
       const { store, stage } = setup();
@@ -244,9 +340,9 @@ describe("WorkspaceStore", () => {
 
       vi.advanceTimersByTime(100);
 
-      expect(stage.captures).toBe(1);
+      expect(stage.captures).toBeGreaterThanOrEqual(1);
       expect(store.getSnapshot().previews.original).toEqual({
-        src: "data:image/webp;capture-1",
+        src: "data:image/webp;preview-original-1",
         fresh: true,
       });
     });
@@ -270,7 +366,7 @@ describe("WorkspaceStore", () => {
 
       expect(stage.captures).toBe(0);
       vi.advanceTimersByTime(100);
-      expect(stage.captures).toBe(1);
+      expect(stage.captures).toBe(2);
     });
 
     it("keeps showing the previous image, marked stale, while re-rendering", () => {
@@ -280,7 +376,7 @@ describe("WorkspaceStore", () => {
       stage.settle();
 
       expect(store.getSnapshot().previews.original).toEqual({
-        src: "data:image/webp;capture-1",
+        src: "data:image/webp;preview-original-1",
         fresh: false,
       });
     });

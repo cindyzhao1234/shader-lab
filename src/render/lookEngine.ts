@@ -282,8 +282,17 @@ export class LookEngine {
   private activeLookId = DEFAULT_LOOK_ID;
   private activeParams: LookParams = {};
   private readonly meshBindings = new Map<THREE.Mesh, MeshMaterialBinding>();
+  private readonly knownOriginalMaterials = new WeakMap<
+    THREE.Mesh,
+    THREE.Material | THREE.Material[]
+  >();
+  private readonly knownOriginalLights = new WeakMap<
+    THREE.Light,
+    { color: THREE.Color; intensity: number }
+  >();
   private readonly baselineLights = new Map<THREE.Light, BaselineLightState>();
   private baselineEnvironmentIntensity: number;
+  private hasLightingBaseline = false;
   private activePasses: Pass[] = [];
   private disposedMaterialCount = 0;
   private disposedPassCount = 0;
@@ -457,6 +466,60 @@ export class LookEngine {
   }
 
   /**
+   * Temporarily switches the scene and composer to the exact `Original`
+   * (identity) state for the duration of `callback`, then restores the active
+   * Look's cloned materials, lighting and post-processing passes without
+   * allocating, cloning or disposing any GPU resources.
+   *
+   * Used by Stage 4 real-time Before/After comparison so the left (Original)
+   * and right (Active Look) views render in the same frame with zero material
+   * churn or shader recompilation.
+   */
+  withTemporaryOriginal<T>(callback: () => T): T {
+    const handler = this.handlers.get(this.activeLookId);
+    if (!handler || handler.isIdentity) {
+      return callback();
+    }
+
+    const previousPassEnabled = this.activePasses.map((pass) => pass.enabled);
+
+    for (const binding of this.meshBindings.values()) {
+      binding.mesh.material = binding.original;
+    }
+
+    if (this.hasLightingBaseline) {
+      this.scene.environmentIntensity = this.baselineEnvironmentIntensity;
+      for (const state of this.baselineLights.values()) {
+        state.light.color.copy(state.color);
+        state.light.intensity = state.intensity;
+      }
+    }
+
+    for (const pass of this.activePasses) {
+      pass.enabled = false;
+    }
+
+    try {
+      return callback();
+    } finally {
+      for (const binding of this.meshBindings.values()) {
+        binding.mesh.material = binding.cloned;
+      }
+
+      if (handler.lighting && this.hasLightingBaseline) {
+        handler.lighting.applyLighting(this.buildLightingContext(), this.activeParams);
+      }
+
+      for (let i = 0; i < this.activePasses.length; i += 1) {
+        const pass = this.activePasses[i];
+        if (pass) {
+          pass.enabled = previousPassEnabled[i] ?? true;
+        }
+      }
+    }
+  }
+
+  /**
    * Restores every mesh's exact original material, restores baseline light
    * colours/intensities, and removes and disposes all Look post-processing passes.
    */
@@ -467,13 +530,14 @@ export class LookEngine {
     }
     this.meshBindings.clear();
 
-    if (this.baselineLights.size > 0) {
+    if (this.hasLightingBaseline) {
       this.scene.environmentIntensity = this.baselineEnvironmentIntensity;
       for (const state of this.baselineLights.values()) {
         state.light.color.copy(state.color);
         state.light.intensity = state.intensity;
       }
       this.baselineLights.clear();
+      this.hasLightingBaseline = false;
     }
 
     if (this.activePasses.length > 0) {
@@ -518,7 +582,12 @@ export class LookEngine {
     treatment: LookMaterialTreatment,
     params: Readonly<LookParams>,
   ): void {
-    const original = mesh.material;
+    let original = this.knownOriginalMaterials.get(mesh);
+    if (!original) {
+      original = mesh.material;
+      this.knownOriginalMaterials.set(mesh, original);
+    }
+
     const cloned = Array.isArray(original)
       ? original.map((mat) => treatment.createMaterial(mat, params))
       : treatment.createMaterial(original, params);
@@ -528,21 +597,32 @@ export class LookEngine {
   }
 
   private captureLightingBaseline(root: THREE.Object3D): void {
-    if (this.baselineLights.size === 0) {
+    if (!this.hasLightingBaseline) {
       this.baselineEnvironmentIntensity = this.scene.environmentIntensity ?? 1;
+      this.hasLightingBaseline = true;
     }
 
-    root.traverse((object) => {
+    const recordLight = (object: THREE.Object3D) => {
       const light = object as THREE.Light;
       if (!light.isLight || this.baselineLights.has(light)) {
         return;
       }
+      let known = this.knownOriginalLights.get(light);
+      if (!known) {
+        known = { color: light.color.clone(), intensity: light.intensity };
+        this.knownOriginalLights.set(light, known);
+      }
       this.baselineLights.set(light, {
         light,
-        color: light.color.clone(),
-        intensity: light.intensity,
+        color: known.color.clone(),
+        intensity: known.intensity,
       });
-    });
+    };
+
+    this.scene.traverse(recordLight);
+    if (root !== this.scene) {
+      root.traverse(recordLight);
+    }
   }
 
   private buildLightingContext(): LookLightingContext {

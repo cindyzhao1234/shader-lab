@@ -22,6 +22,11 @@ import {
   type LookParamValue,
 } from "../looks/schema";
 import {
+  SPLIT_BOUNDS,
+  clampSplitRatio,
+  type ComparisonMode,
+} from "../render/comparison";
+import {
   importGltfFiles,
   type ImportedModelResult,
   type ImportFileInput,
@@ -58,6 +63,7 @@ export interface StageLike {
     contentRoot?: THREE.Object3D,
   ): void;
   syncLookScene?(contentRoot?: THREE.Object3D): void;
+  setComparison?(mode: ComparisonMode, splitRatio?: number): void;
   captureLookPreview?(
     lookId: string,
     params: Readonly<LookParams>,
@@ -88,6 +94,10 @@ export interface WorkspaceSnapshot {
   lookParams: Readonly<LookParams>;
   /** True when the active Look has parameters that differ from their defaults. */
   canResetLookParams: boolean;
+  /** Before/After comparison mode ("off" | "split" | "side-by-side"). */
+  comparisonMode: ComparisonMode;
+  /** Normalised split divider position (0.08..0.92). */
+  splitRatio: number;
   fov: number;
   canUndo: boolean;
   canRedo: boolean;
@@ -165,6 +175,8 @@ export class WorkspaceStore {
       activeLookId: DEFAULT_LOOK_ID,
       lookParams: initialParams,
       canResetLookParams: false,
+      comparisonMode: "off",
+      splitRatio: SPLIT_BOUNDS.default,
       fov: 50,
       canUndo: false,
       canRedo: false,
@@ -199,6 +211,10 @@ export class WorkspaceStore {
       this.snapshot.activeLookId,
       this.snapshot.lookParams,
       content,
+    );
+    stage.setComparison?.(
+      this.snapshot.comparisonMode,
+      this.snapshot.splitRatio,
     );
     this.update({
       ready: true,
@@ -238,6 +254,8 @@ export class WorkspaceStore {
       activeLookId: DEFAULT_LOOK_ID,
       lookParams: this.getParamsForLook(DEFAULT_LOOK_ID),
       canResetLookParams: false,
+      comparisonMode: "off",
+      splitRatio: SPLIT_BOUNDS.default,
       previews: this.buildPreviews(),
     });
   }
@@ -746,7 +764,7 @@ export class WorkspaceStore {
       lookParams: validated,
       canResetLookParams: canReset,
     });
-    this.invalidatePreviews();
+    this.schedulePreviewRender();
   }
 
   private writeLookParamsInPlace(lookId: string, params: Readonly<LookParams>): void {
@@ -764,7 +782,35 @@ export class WorkspaceStore {
         canResetLookParams: canReset,
       });
     }
-    this.invalidatePreviews();
+    this.invalidateLookPreview(lookId);
+  }
+
+  // ---- Before/After comparison ----
+
+  setComparisonMode(mode: ComparisonMode): void {
+    if (mode === this.snapshot.comparisonMode) {
+      return;
+    }
+    this.stage?.setComparison?.(mode, this.snapshot.splitRatio);
+    this.update({ comparisonMode: mode });
+  }
+
+  toggleComparison(): void {
+    const next: ComparisonMode = this.snapshot.comparisonMode === "off" ? "split" : "off";
+    this.setComparisonMode(next);
+  }
+
+  setSplitRatio(ratio: number): void {
+    const clamped = clampSplitRatio(ratio);
+    if (Math.abs(clamped - this.snapshot.splitRatio) < 1e-6) {
+      return;
+    }
+    this.stage?.setComparison?.(this.snapshot.comparisonMode, clamped);
+    this.update({ splitRatio: clamped });
+  }
+
+  resetSplitRatio(): void {
+    this.setSplitRatio(SPLIT_BOUNDS.default);
   }
 
   // ---- previews ----
@@ -772,6 +818,22 @@ export class WorkspaceStore {
   /** Marks every thumbnail stale and schedules a re-render once things go quiet. */
   invalidatePreviews(): void {
     this.previewRevision += 1;
+    this.schedulePreviewRender();
+  }
+
+  /**
+   * Marks only a single Look's thumbnail stale (for example, when its sliders
+   * are adjusted) so `Original` and other Looks are not needlessly re-captured.
+   */
+  invalidateLookPreview(lookId: string): void {
+    if (lookId === DEFAULT_LOOK_ID) {
+      return;
+    }
+    this.previewCache.markStale(lookId);
+    this.schedulePreviewRender();
+  }
+
+  private schedulePreviewRender(): void {
     clearTimeout(this.previewTimer);
     this.previewTimer = setTimeout(() => this.renderPreviews(), this.previewDelayMs);
     this.update({ previews: this.buildPreviews() });

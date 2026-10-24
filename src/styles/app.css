@@ -868,6 +868,210 @@ body.is-resizing .resize-handle::after {
   font-size: 10px;
 }
 
+.viewport__compare-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 7px 0 8px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background var(--duration) var(--ease),
+    border-color var(--duration) var(--ease),
+    color var(--duration) var(--ease);
+}
+
+.viewport__compare-btn:hover {
+  background: var(--elevated);
+  color: var(--text-primary);
+}
+
+.viewport__compare-btn.is-active {
+  border-color: var(--stroke);
+  background: var(--elevated);
+  color: var(--text-primary);
+}
+
+.viewport__compare-btn kbd {
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  font-size: 10px;
+}
+
+.viewport__compare-modes {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 2px;
+  padding: 2px;
+  border: 1px solid var(--stroke-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--panel-sunken);
+}
+
+.viewport__mode-btn {
+  height: 20px;
+  padding: 0 7px;
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--text-tertiary);
+  font-size: 10.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background var(--duration) var(--ease),
+    color var(--duration) var(--ease);
+}
+
+.viewport__mode-btn:hover {
+  color: var(--text-primary);
+}
+
+.viewport__mode-btn.is-active {
+  background: var(--elevated);
+  color: var(--text-primary);
+}
+
+/* ---- Before/After comparison overlay ---- */
+
+.comparison-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  pointer-events: none;
+}
+
+.comparison-labels {
+  position: absolute;
+  bottom: 54px;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transform: translateX(-50%);
+}
+
+.comparison-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--stroke);
+  border-radius: var(--radius-sm);
+  background: var(--surface-overlay);
+  box-shadow: var(--shadow-sm);
+  color: var(--text-primary);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
+.comparison-badge__tag {
+  color: var(--text-tertiary);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.comparison-badge__name {
+  font-weight: 600;
+}
+
+.comparison-badge__note {
+  padding-left: 6px;
+  border-left: 1px solid var(--stroke-subtle);
+  color: var(--text-tertiary);
+  font-size: 10.5px;
+}
+
+.comparison-divider {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--split-pos, 50%);
+  width: 28px;
+  transform: translateX(-50%);
+  cursor: col-resize;
+  touch-action: none;
+  pointer-events: auto;
+  outline: none;
+}
+
+.comparison-divider__line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1.5px;
+  background: rgba(242, 242, 243, 0.55);
+  box-shadow: 0 0 0 1px rgba(16, 17, 19, 0.45);
+  transform: translateX(-50%);
+  transition: background var(--duration) var(--ease);
+}
+
+.comparison-divider:hover .comparison-divider__line,
+.comparison-divider:focus-visible .comparison-divider__line,
+.comparison-divider.is-dragging .comparison-divider__line {
+  width: 2px;
+  background: var(--text-primary);
+}
+
+.comparison-divider__handle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--stroke-strong);
+  border-radius: var(--radius-full);
+  background: var(--panel);
+  box-shadow: var(--shadow-sm);
+  color: var(--text-secondary);
+  transform: translate(-50%, -50%);
+  transition:
+    background var(--duration) var(--ease),
+    border-color var(--duration) var(--ease),
+    color var(--duration) var(--ease),
+    transform var(--duration) var(--ease);
+}
+
+.comparison-divider:hover .comparison-divider__handle,
+.comparison-divider.is-dragging .comparison-divider__handle {
+  border-color: var(--text-primary);
+  background: var(--elevated);
+  color: var(--text-primary);
+}
+
+.comparison-divider:focus-visible .comparison-divider__handle {
+  border-color: var(--text-primary);
+  background: var(--elevated);
+  color: var(--text-primary);
+  box-shadow:
+    0 0 0 2px var(--bg),
+    0 0 0 4px var(--focus);
+}
+
+.comparison-seam {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  background: var(--stroke);
+  transform: translateX(-50%);
+}
+
 .viewport__toolbar-divider {
   width: 1px;
   height: 16px;
@@ -1644,6 +1848,10 @@ body.is-resizing .resize-handle::after {
     max-width: calc(100vw - 24px);
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  .comparison-badge__note {
+    display: none;
   }
 }
 

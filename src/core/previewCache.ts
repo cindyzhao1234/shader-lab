@@ -65,6 +65,18 @@ export class PreviewCache<T> {
     this.entries.delete(lookId);
   }
 
+  /**
+   * Marks a single Look's cached thumbnail as stale without discarding its
+   * image, so the gallery keeps showing the previous thumbnail (`fresh: false`)
+   * while only that Look is re-rendered.
+   */
+  markStale(lookId: string): void {
+    const entry = this.entries.get(lookId);
+    if (entry) {
+      this.entries.set(lookId, { value: entry.value, revision: -1 });
+    }
+  }
+
   clear(): void {
     this.entries.clear();
   }

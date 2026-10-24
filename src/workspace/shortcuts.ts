@@ -8,6 +8,7 @@ export type ShortcutId =
   | "redo"
   | "focus"
   | "resetView"
+  | "toggleComparison"
   | "toggleScene"
   | "toggleLooks"
   | "shortcuts";
@@ -24,6 +25,7 @@ export const SHORTCUTS: readonly ShortcutDefinition[] = [
   { id: "redo", description: "Redo", keys: ["Mod", "Shift", "Z"] },
   { id: "focus", description: "Focus the selection, or the whole scene", keys: ["F"] },
   { id: "resetView", description: "Return to the starting view", keys: ["R"] },
+  { id: "toggleComparison", description: "Compare Original with the active Look", keys: ["C"] },
   { id: "toggleScene", description: "Show or hide the scene panel", keys: ["["] },
   { id: "toggleLooks", description: "Show or hide the Look Studio", keys: ["]"] },
   { id: "shortcuts", description: "Show keyboard shortcuts", keys: ["?"] },
@@ -67,6 +69,8 @@ export function matchShortcut(event: KeyInput, isMac: boolean): ShortcutId | nul
       return event.shiftKey ? null : "focus";
     case "r":
       return event.shiftKey ? null : "resetView";
+    case "c":
+      return event.shiftKey ? null : "toggleComparison";
     case "[":
       return "toggleScene";
     case "]":

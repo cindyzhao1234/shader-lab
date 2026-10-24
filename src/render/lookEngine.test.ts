@@ -247,4 +247,155 @@ describe("LookEngine", () => {
     expect(engine.diagnostics.activeMeshClones).toBe(2);
     expect(importedMesh.material).toBe(importedMat);
   });
+
+  it("temporarily restores Original state during Before/After comparison frames without reallocating or disposing materials", () => {
+    const {
+      scene,
+      group,
+      mesh,
+      multiMesh,
+      sourceMat,
+      subMaterialA,
+      subMaterialB,
+      sun,
+    } = buildTestScene();
+    const composer = new FakeComposer();
+    const engine = new LookEngine({ scene, composer });
+
+    const originalSunHex = sun.color.getHexString();
+
+    // Also include an imported mesh hierarchy
+    const importedMat = new THREE.MeshStandardMaterial({ color: 0x4477aa, roughness: 0.3 });
+    const importedMesh = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), importedMat);
+    group.add(importedMesh);
+
+    engine.applyLook(EXPERIMENTAL_LOOK_ID, {
+      toneBands: 6,
+      surfaceWarmth: 0.5,
+      saturation: 1.2,
+    });
+
+    const clonedHero = mesh.material;
+    const clonedImported = importedMesh.material;
+    const activeSunHex = sun.color.getHexString();
+    const activeSunIntensity = sun.intensity;
+    const activeEnvIntensity = scene.environmentIntensity;
+    const gradingPass = composer.passes[1]!;
+
+    expect(clonedHero).not.toBe(sourceMat);
+    expect(clonedImported).not.toBe(importedMat);
+    expect(gradingPass.enabled).toBe(true);
+
+    // Run a comparison left-half render inside withTemporaryOriginal
+    engine.withTemporaryOriginal(() => {
+      expect(mesh.material).toBe(sourceMat);
+      expect(multiMesh.material).toEqual([subMaterialA, subMaterialB]);
+      expect(importedMesh.material).toBe(importedMat);
+      expect(sun.color.getHexString()).toBe(originalSunHex);
+      expect(sun.intensity).toBe(2.1);
+      expect(scene.environmentIntensity).toBe(0.42);
+      expect(gradingPass.enabled).toBe(false);
+    });
+
+    // Immediately after, the exact same cloned materials, Look lighting and passes are active again
+    expect(mesh.material).toBe(clonedHero);
+    expect(importedMesh.material).toBe(clonedImported);
+    expect(sun.color.getHexString()).toBe(activeSunHex);
+    expect(sun.intensity).toBe(activeSunIntensity);
+    expect(scene.environmentIntensity).toBe(activeEnvIntensity);
+    expect(gradingPass.enabled).toBe(true);
+
+    // Zero materials or passes were disposed during the comparison swap
+    expect(engine.diagnostics.disposedMaterialCount).toBe(0);
+    expect(engine.diagnostics.disposedPassCount).toBe(0);
+
+    // Even if the render callback throws, Look state is restored
+    expect(() =>
+      engine.withTemporaryOriginal(() => {
+        throw new Error("simulated render error");
+      }),
+    ).toThrow(/simulated render error/);
+    expect(mesh.material).toBe(clonedHero);
+    expect(gradingPass.enabled).toBe(true);
+  });
+
+  it("keeps the Original side completely invariant across repeated parameter changes and rapid Look switches", () => {
+    const {
+      scene,
+      mesh,
+      multiMesh,
+      sourceMat,
+      subMaterialA,
+      subMaterialB,
+      sun,
+    } = buildTestScene();
+    const composer = new FakeComposer();
+    const engine = new LookEngine({ scene, composer });
+
+    const initialColorHex = sourceMat.color.getHexString();
+    const initialRoughness = sourceMat.roughness;
+    const initialMetalness = sourceMat.metalness;
+    const initialSunHex = sun.color.getHexString();
+    const initialSunIntensity = sun.intensity;
+    const initialEnvIntensity = scene.environmentIntensity;
+
+    const assertOriginalUntouched = () => {
+      expect(mesh.material).toBe(sourceMat);
+      expect((mesh.material as THREE.MeshStandardMaterial).color.getHexString()).toBe(initialColorHex);
+      expect((mesh.material as THREE.MeshStandardMaterial).roughness).toBe(initialRoughness);
+      expect((mesh.material as THREE.MeshStandardMaterial).metalness).toBe(initialMetalness);
+      expect(multiMesh.material).toEqual([subMaterialA, subMaterialB]);
+      expect(sun.color.getHexString()).toBe(initialSunHex);
+      expect(sun.intensity).toBe(initialSunIntensity);
+      expect(scene.environmentIntensity).toBe(initialEnvIntensity);
+      // No Look post-processing pass may be enabled during Original render
+      for (const pass of composer.passes.slice(1, -1)) {
+        expect(pass.enabled).toBe(false);
+      }
+    };
+
+    engine.applyLook(EXPERIMENTAL_LOOK_ID);
+
+    const sliderSteps = [
+      { toneBands: 2, surfaceWarmth: -1.0, saturation: 0.0, contrast: 0.6, vignette: 1.0 },
+      { toneBands: 5, surfaceWarmth: -0.4, saturation: 0.5, contrast: 0.9, vignette: 0.7 },
+      { toneBands: 8, surfaceWarmth: 0.0, saturation: 1.0, contrast: 1.0, vignette: 0.0 },
+      { toneBands: 11, surfaceWarmth: 0.65, saturation: 1.6, contrast: 1.35, vignette: 0.45 },
+      { toneBands: 12, surfaceWarmth: 1.0, saturation: 2.0, contrast: 1.6, vignette: 0.9 },
+    ];
+
+    for (const step of sliderSteps) {
+      engine.updateParams(step);
+
+      // Left pass (Original) must be 100% invariant
+      engine.withTemporaryOriginal(() => {
+        assertOriginalUntouched();
+      });
+
+      // Right pass (Look) must reflect the exact updated parameters
+      const cloned = mesh.material as THREE.MeshStandardMaterial;
+      expect(cloned).not.toBe(sourceMat);
+      expect((cloned.userData.lookUniforms as any).uLookToneBands.value).toBe(step.toneBands);
+      const gradingPass = composer.passes[1] as ShaderPass;
+      expect(gradingPass.enabled).toBe(true);
+      expect(gradingPass.uniforms.uSaturation?.value).toBe(step.saturation);
+      expect(gradingPass.uniforms.uContrast?.value).toBe(step.contrast);
+      expect(gradingPass.uniforms.uVignette?.value).toBe(step.vignette);
+    }
+
+    // Rapid Look switching back and forth with comparison passes
+    for (let i = 0; i < 6; i += 1) {
+      engine.applyLook(DEFAULT_LOOK_ID);
+      assertOriginalUntouched();
+
+      engine.applyLook(EXPERIMENTAL_LOOK_ID, {
+        toneBands: 3 + (i % 6),
+        surfaceWarmth: i % 2 === 0 ? 0.9 : -0.9,
+        saturation: 1.5,
+      });
+      engine.withTemporaryOriginal(() => {
+        assertOriginalUntouched();
+      });
+    }
+  });
 });

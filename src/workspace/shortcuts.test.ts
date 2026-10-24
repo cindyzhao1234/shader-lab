@@ -27,6 +27,7 @@ describe("matchShortcut", () => {
     expect(matchShortcut(key("f"), true)).toBe("focus");
     expect(matchShortcut(key("F"), true)).toBe("focus");
     expect(matchShortcut(key("r"), false)).toBe("resetView");
+    expect(matchShortcut(key("c"), true)).toBe("toggleComparison");
     expect(matchShortcut(key("["), true)).toBe("toggleScene");
     expect(matchShortcut(key("]"), true)).toBe("toggleLooks");
     expect(matchShortcut(key("?", { shiftKey: true }), true)).toBe("shortcuts");
@@ -50,6 +51,7 @@ describe("matchShortcut", () => {
       redo: key("z", { metaKey: true, shiftKey: true }),
       focus: key("f"),
       resetView: key("r"),
+      toggleComparison: key("c"),
       toggleScene: key("["),
       toggleLooks: key("]"),
       shortcuts: key("?", { shiftKey: true }),

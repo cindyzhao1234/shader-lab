@@ -288,6 +288,9 @@ function Workspace({
         case "resetView":
           store.resetView();
           break;
+        case "toggleComparison":
+          store.toggleComparison();
+          break;
         case "toggleScene":
           togglePanel("left");
           break;

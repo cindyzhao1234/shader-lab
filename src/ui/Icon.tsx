@@ -173,6 +173,19 @@ const PATHS = {
       <path d="M6.8 7l.8 11.5c.1.8.7 1.5 1.5 1.5h5.8c.8 0 1.4-.7 1.5-1.5L17.2 7" />
     </>
   ),
+  compare: (
+    <>
+      <rect x="3.5" y="4.5" width="17" height="15" rx="2.5" />
+      <path d="M12 3v18" />
+      <path d="m9.2 10-2 2 2 2M14.8 10l2 2-2 2" />
+    </>
+  ),
+  columns: (
+    <>
+      <rect x="3.5" y="4.5" width="7.2" height="15" rx="1.8" />
+      <rect x="13.3" y="4.5" width="7.2" height="15" rx="1.8" />
+    </>
+  ),
 } satisfies Record<string, ReactNode>;
 
 export type IconName = keyof typeof PATHS;

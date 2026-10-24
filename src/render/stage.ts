@@ -4,7 +4,15 @@ import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+import { DEFAULT_LOOK_ID } from "../looks/catalogue";
 import type { LookParams } from "../looks/schema";
+import {
+  SPLIT_BOUNDS,
+  clampSplitRatio,
+  computeSideBySideRegions,
+  computeSplitRegions,
+  type ComparisonMode,
+} from "./comparison";
 import { LookEngine } from "./lookEngine";
 
 /**
@@ -103,6 +111,10 @@ export class RenderStage {
   private cameraMoving = false;
   private quietFrames = 0;
   private tween: CameraTween | undefined;
+  private comparisonMode: ComparisonMode = "off";
+  private splitRatio: number = SPLIT_BOUNDS.default;
+  private viewportWidth = 1;
+  private viewportHeight = 1;
 
   constructor(options: StageOptions) {
     const { canvas } = options;
@@ -372,9 +384,29 @@ export class RenderStage {
     this.requestRender();
   }
 
+  get comparison(): { mode: ComparisonMode; splitRatio: number } {
+    return { mode: this.comparisonMode, splitRatio: this.splitRatio };
+  }
+
+  /**
+   * Configures Before/After comparison mode (`"off"`, `"split"`, or
+   * `"side-by-side"`) and the normalised divider position (`0.08..0.92`).
+   */
+  setComparison(mode: ComparisonMode, splitRatio = this.splitRatio): void {
+    const nextRatio = clampSplitRatio(splitRatio);
+    if (this.comparisonMode === mode && Math.abs(this.splitRatio - nextRatio) < 1e-6) {
+      return;
+    }
+    this.comparisonMode = mode;
+    this.splitRatio = nextRatio;
+    this.requestRender();
+  }
+
   /**
    * Renders a preview thumbnail for a specific Look and parameter set, then
-   * restores the active Look so the main viewport is left undisturbed.
+   * restores the active Look and (when comparison mode is active) re-renders
+   * the split/side-by-side composite so the visible viewport is never left
+   * showing a single-view thumbnail render.
    */
   captureLookPreview(
     lookId: string,
@@ -386,25 +418,50 @@ export class RenderStage {
     const previousId = this.lookEngine.currentLookId;
     const previousParams = { ...this.lookEngine.currentParams };
 
-    if (lookId === previousId) {
-      return this.captureFrame(width, aspect);
-    }
-
     try {
-      this.lookEngine.applyLook(lookId, params, contentRoot);
-      return this.captureFrame(width, aspect);
+      if (lookId === previousId) {
+        return this.captureSingleViewFrame(width, aspect);
+      }
+
+      if (lookId === DEFAULT_LOOK_ID) {
+        return this.lookEngine.withTemporaryOriginal(() =>
+          this.captureSingleViewFrame(width, aspect),
+        );
+      }
+
+      try {
+        this.lookEngine.applyLook(lookId, params, contentRoot);
+        return this.captureSingleViewFrame(width, aspect);
+      } finally {
+        this.lookEngine.applyLook(previousId, previousParams, contentRoot);
+      }
     } finally {
-      this.lookEngine.applyLook(previousId, previousParams, contentRoot);
-      this.requestRender();
+      if (this.comparisonMode !== "off") {
+        this.renderCompositeFrame();
+      }
     }
   }
 
   /**
-   * Renders a fresh frame and copies the centre of it into a small image.
-   * The copy must happen in the same task as the render: the canvas does not
-   * preserve its drawing buffer, so by the next task the pixels may be gone.
+   * Renders a fresh single-viewport frame and copies the centre of it into a
+   * small image. Always renders un-split so Look gallery thumbnails never
+   * show a comparison divider.
    */
   captureFrame(width: number, aspect = 16 / 10): string {
+    const output = this.captureSingleViewFrame(width, aspect);
+    if (this.comparisonMode !== "off") {
+      // Re-render the comparison composite onto the visible canvas immediately
+      // in the same task so the user never sees a single-frame flicker.
+      this.renderCompositeFrame();
+    }
+    return output;
+  }
+
+  private captureSingleViewFrame(width: number, aspect = 16 / 10): string {
+    this.renderer.setScissorTest(false);
+    this.renderer.setViewport(0, 0, this.viewportWidth, this.viewportHeight);
+    this.camera.aspect = this.viewportWidth / this.viewportHeight;
+    this.camera.updateProjectionMatrix();
     this.composer.render();
 
     const source = this.renderer.domElement;
@@ -476,6 +533,8 @@ export class RenderStage {
     const canvas = this.renderer.domElement;
     const width = Math.max(1, canvas.clientWidth);
     const height = Math.max(1, canvas.clientHeight);
+    this.viewportWidth = width;
+    this.viewportHeight = height;
 
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, this.maxPixelRatio));
     this.renderer.setSize(width, height, false);
@@ -483,6 +542,72 @@ export class RenderStage {
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
     this.requestRender();
+  }
+
+  /**
+   * Renders the current frame according to `this.comparisonMode`:
+   * - `"off"`: single full-viewport pass with the active Look.
+   * - `"split"`: left scissor region renders `Original`, right scissor region
+   *   renders the active Look using the identical full-viewport camera matrix
+   *   so geometry and screen-space UVs align seamlessly across the divider.
+   * - `"side-by-side"`: left half-viewport renders `Original`, right
+   *   half-viewport renders the active Look with synchronized half-width aspect.
+   */
+  private renderCompositeFrame(): void {
+    const width = this.viewportWidth;
+    const height = this.viewportHeight;
+
+    if (this.comparisonMode === "off") {
+      this.composer.render();
+      return;
+    }
+
+    try {
+      this.renderer.setScissorTest(true);
+
+      if (this.comparisonMode === "split") {
+        const { left, right } = computeSplitRegions(width, height, this.splitRatio);
+
+        // Both halves share the full-viewport camera projection and viewport.
+        this.renderer.setViewport(0, 0, width, height);
+
+        // Left half: Original (identity)
+        this.renderer.setScissor(left.x, left.y, left.width, left.height);
+        this.lookEngine.withTemporaryOriginal(() => {
+          this.composer.render();
+        });
+
+        // Right half: Active Look
+        this.renderer.setScissor(right.x, right.y, right.width, right.height);
+        this.composer.render();
+      } else {
+        const { left, right } = computeSideBySideRegions(width, height);
+
+        // Left half-viewport: Original
+        this.camera.aspect = Math.max(1, left.width) / height;
+        this.camera.updateProjectionMatrix();
+        this.renderer.setViewport(left.x, left.y, left.width, left.height);
+        this.renderer.setScissor(left.x, left.y, left.width, left.height);
+        this.lookEngine.withTemporaryOriginal(() => {
+          this.composer.render();
+        });
+
+        // Right half-viewport: Active Look
+        this.camera.aspect = Math.max(1, right.width) / height;
+        this.camera.updateProjectionMatrix();
+        this.renderer.setViewport(right.x, right.y, right.width, right.height);
+        this.renderer.setScissor(right.x, right.y, right.width, right.height);
+        this.composer.render();
+      }
+    } finally {
+      this.renderer.setScissorTest(false);
+      this.renderer.setScissor(0, 0, width, height);
+      this.renderer.setViewport(0, 0, width, height);
+      if (this.camera.aspect !== width / height) {
+        this.camera.aspect = width / height;
+        this.camera.updateProjectionMatrix();
+      }
+    }
   }
 
   private start(): void {
@@ -520,7 +645,7 @@ export class RenderStage {
       this.renderer.info.reset();
 
       const startedAt = performance.now();
-      this.composer.render();
+      this.renderCompositeFrame();
       this.reportStats(performance.now() - startedAt);
     };
 
